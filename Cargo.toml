@@ -1,0 +1,26 @@
+[package]
+name = "layeredconf"
+version = "0.1.0"
+authors = ["Greg \"GothAck\" Miell <rust@greg.gothack.ninja>"]
+description = "Layered configeration files, deserialized with serde"
+repository = "https://github.com/GothAck/layeredconf"
+documentation = "https://docs.rs/layeredconf"
+categories = ["config", "encoding", "parsing"]
+readme = "README.md"
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = { version = "0.8" }
+serde_json = "1.0"
+toml = { version = "0.5" }
+thiserror = "1.0"
+
+layeredconf-derive = { version = "0.1.0" }
+
+[workspace]
+members = [".", "layeredconf-derive"]
+
+[patch]
+layeredconf-derive = { path = "layeredconf-derive" }
