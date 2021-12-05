@@ -1,9 +1,14 @@
 [package]
 name = "layeredconf-derive"
 version = "0.1.0"
+authors = ["Greg \"GothAck\" Miell <rust@greg.gothack.ninja>"]
+description = "Layered configeration files, deserialized with serde"
+repository = "https://github.com/GothAck/layeredconf"
+documentation = "https://docs.rs/layeredconf"
+categories = ["config", "encoding", "parsing"]
+readme = "README.md"
+license = "MIT"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 darling = "0.13"
