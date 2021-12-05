@@ -14,7 +14,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let tokens = quote! { #conf_struct };
 
-    return tokens.into();
+    tokens.into()
 }
 
 #[derive(Debug, FromDeriveInput)]
@@ -28,7 +28,7 @@ impl LayeredConfStruct {
     fn is_option(&self, ty: &Type) -> bool {
         match ty {
             Type::Path(path) => match path.path.segments.first() {
-                Some(seg) => seg.ident.to_string() == "Option",
+                Some(seg) => seg.ident == "Option",
                 _ => false,
             },
             _ => false,
@@ -321,9 +321,9 @@ impl ToTokens for LayeredConfStruct {
             ref data,
         } = *self;
 
-        tokens.extend(self.to_layer_tokens(&ident, &data));
-        tokens.extend(self.to_merge_tokens(&ident, &data));
-        tokens.extend(self.to_solidify_tokens(&ident, &data));
+        tokens.extend(self.to_layer_tokens(ident, data));
+        tokens.extend(self.to_merge_tokens(ident, data));
+        tokens.extend(self.to_solidify_tokens(ident, data));
     }
 }
 

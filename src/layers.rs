@@ -11,7 +11,12 @@ use super::{LayeredConfLayer, LayeredConfMerge, LayeredConfSolid, LayeredConfSol
 pub struct Builder<TSolid>
 where
     TSolid: LayeredConfSolid,
-    <TSolid>::Layer: LayeredConfLayer + std::fmt::Debug + Default + serde::de::DeserializeOwned,
+    <TSolid>::Layer: LayeredConfLayer
+        + LayeredConfMerge<<TSolid>::Layer>
+        + LayeredConfSolidify<TSolid>
+        + std::fmt::Debug
+        + Default
+        + serde::de::DeserializeOwned,
 {
     layers: Vec<Arc<Layer<TSolid::Layer>>>,
 }
@@ -63,6 +68,21 @@ where
         }
 
         self.layers[0].obj.read().unwrap().solidify()
+    }
+}
+
+impl<TSolid> Default for Builder<TSolid>
+where
+    TSolid: LayeredConfSolid,
+    <TSolid>::Layer: LayeredConfLayer
+        + LayeredConfMerge<<TSolid>::Layer>
+        + LayeredConfSolidify<TSolid>
+        + std::fmt::Debug
+        + Default
+        + serde::de::DeserializeOwned,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
