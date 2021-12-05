@@ -9,58 +9,40 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(ThisError, Debug)]
 pub enum Error {
     #[error("Solidify failed, missing fields {missing:?}")]
-    SolidifyFailedMissing {
-        missing: Vec<String>,
-    },
+    SolidifyFailedMissing { missing: Vec<String> },
     #[error("Solidify failed, no layers")]
     SolidifyFailedNoLayers,
     #[error("I/O Error {wrapped:?}")]
-    IoError {
-        wrapped: std::io::Error,
-    },
+    IoError { wrapped: std::io::Error },
     #[error("Json Error {wrapped:?}")]
-    JsonError {
-        wrapped: serde_json::Error,
-    },
+    JsonError { wrapped: serde_json::Error },
     #[error("Toml Error {wrapped:?}")]
-    TomlError {
-        wrapped: toml::de::Error,
-    },
+    TomlError { wrapped: toml::de::Error },
     #[error("Yaml Error {wrapped:?}")]
-    YamlError {
-        wrapped: serde_yaml::Error,
-    },
+    YamlError { wrapped: serde_yaml::Error },
 }
 
 impl From<std::io::Error> for Error {
     fn from(wrapped: std::io::Error) -> Self {
-        Error::IoError {
-            wrapped,
-        }
+        Error::IoError { wrapped }
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(wrapped: serde_json::Error) -> Self {
-        Error::JsonError {
-            wrapped,
-        }
+        Error::JsonError { wrapped }
     }
 }
 
 impl From<toml::de::Error> for Error {
     fn from(wrapped: toml::de::Error) -> Self {
-        Error::TomlError {
-            wrapped,
-        }
+        Error::TomlError { wrapped }
     }
 }
 
 impl From<serde_yaml::Error> for Error {
     fn from(wrapped: serde_yaml::Error) -> Self {
-        Error::YamlError {
-            wrapped,
-        }
+        Error::YamlError { wrapped }
     }
 }
 

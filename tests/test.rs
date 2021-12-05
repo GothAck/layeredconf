@@ -2,7 +2,7 @@ use std::{path::PathBuf, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use layeredconf::{LayeredConf, layers::*, LayeredConfMerge, LayeredConfSolidify};
+use layeredconf::{layers::*, LayeredConf, LayeredConfMerge, LayeredConfSolidify};
 
 #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
 struct Config {
@@ -51,7 +51,6 @@ fn test_merge() {
 
     let top_layer: ConfigLayer = serde_json::from_str(TOP_JSON).unwrap();
 
-
     intermediate_layer.merge_from(&top_layer);
     base_layer.merge_from(&intermediate_layer);
 
@@ -62,7 +61,10 @@ fn test_merge() {
     assert_eq!(solid.name, "yes");
     assert_eq!(solid.data_path, PathBuf::from("/tmp/path"));
     assert_eq!(solid.subconfig.flibble, 10);
-    assert_eq!(solid.subconfig.duration, Duration::from_secs(50) + Duration::from_nanos(99));
+    assert_eq!(
+        solid.subconfig.duration,
+        Duration::from_secs(50) + Duration::from_nanos(99)
+    );
 }
 
 #[test]

@@ -1,14 +1,18 @@
-use darling::{ast::{self}, util::{self, Ignored}, FromDeriveInput, FromField, FromMeta, ToTokens};
+use darling::{
+    ast::{self},
+    util::{self, Ignored},
+    FromDeriveInput, FromField, FromMeta, ToTokens,
+};
 use proc_macro::{self, TokenStream};
 use quote::quote;
-use syn::{parse_macro_input, Ident, Type, Path, PathArguments, GenericArgument};
+use syn::{parse_macro_input, GenericArgument, Ident, Path, PathArguments, Type};
 
 #[proc_macro_derive(LayeredConf, attributes(confstruct))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
     let conf_struct = LayeredConfStruct::from_derive_input(&input).expect("Wrong options");
 
-    let tokens = quote!{ #conf_struct };
+    let tokens = quote! { #conf_struct };
 
     return tokens.into();
 }
@@ -33,9 +37,9 @@ impl LayeredConfStruct {
 
     fn extract_type(&self, ty: &Type) -> Option<Type> {
         fn path_is_option(path: &Path) -> bool {
-            path.leading_colon.is_none() &&
-            path.segments.len() == 1 &&
-            path.segments.first().unwrap().ident == "Option"
+            path.leading_colon.is_none()
+                && path.segments.len() == 1
+                && path.segments.first().unwrap().ident == "Option"
         }
         match ty {
             Type::Path(tp) if tp.qself.is_none() && path_is_option(&tp.path) => {
@@ -50,12 +54,16 @@ impl LayeredConfStruct {
                 } else {
                     None
                 }
-            },
+            }
             _ => None,
         }
     }
 
-    fn to_layer_tokens(&self, ident: &Ident, data: &ast::Data<Ignored, LayeredConfField>) -> proc_macro2::TokenStream {
+    fn to_layer_tokens(
+        &self,
+        ident: &Ident,
+        data: &ast::Data<Ignored, LayeredConfField>,
+    ) -> proc_macro2::TokenStream {
         let layer_ident = Ident::new(&format!("{}Layer", ident), ident.span());
 
         let fields = data
@@ -64,72 +72,80 @@ impl LayeredConfStruct {
             .expect("Should never be enum")
             .fields;
 
-        let option_field_list = fields.clone().into_iter().map(|f| {
-            let name = &f.ident;
-            let ty = &f.ty;
+        let option_field_list = fields
+            .clone()
+            .into_iter()
+            .map(|f| {
+                let name = &f.ident;
+                let ty = &f.ty;
 
-            let option = self.is_option(ty);
-            let subtype = if option { self.extract_type(ty) } else { None };
-            let subconfig = f.subconfig;
-            match (option, subconfig, subtype) {
-                (true, false, _) => {
-                    quote! {
-                        #[serde(default, skip_serializing_if = "Option::is_none")]
-                        #name: #ty,
+                let option = self.is_option(ty);
+                let subtype = if option { self.extract_type(ty) } else { None };
+                let subconfig = f.subconfig;
+                match (option, subconfig, subtype) {
+                    (true, false, _) => {
+                        quote! {
+                            #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #name: #ty,
+                        }
                     }
-                },
-                (true, true, Some(subtype)) => {
-                    let subtype_id = match &subtype {
-                        Type::Path(path) => match path.path.segments.first() {
-                            Some(seg) => &seg.ident,
+                    (true, true, Some(subtype)) => {
+                        let subtype_id = match &subtype {
+                            Type::Path(path) => match path.path.segments.first() {
+                                Some(seg) => &seg.ident,
+                                _ => panic!("Can't find ident"),
+                            },
                             _ => panic!("Can't find ident"),
-                        },
-                        _ => panic!("Can't find ident"),
-                    };
-                    let layer_subtype = Ident::new(&format!("{}Layer", subtype_id), subtype_id.span());
-                    quote! {
-                        #[serde(default, skip_serializing_if = "Option::is_none")]
-                        #name: Option<#layer_subtype>,
+                        };
+                        let layer_subtype =
+                            Ident::new(&format!("{}Layer", subtype_id), subtype_id.span());
+                        quote! {
+                            #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #name: Option<#layer_subtype>,
+                        }
                     }
-                },
-                (true, true, None) => {
-                    panic!("Subtype not extracted {:?} {:?}", name, ty);
-                }
-                (false, false, _) => {
-                    quote! {
-                        #[serde(default, skip_serializing_if = "Option::is_none")]
-                        #name: Option<#ty>,
+                    (true, true, None) => {
+                        panic!("Subtype not extracted {:?} {:?}", name, ty);
                     }
-                },
-                (false, true, None) => {
-                    let ty_id = match &ty {
-                        Type::Path(path) => match path.path.segments.first() {
-                            Some(seg) => &seg.ident,
+                    (false, false, _) => {
+                        quote! {
+                            #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #name: Option<#ty>,
+                        }
+                    }
+                    (false, true, None) => {
+                        let ty_id = match &ty {
+                            Type::Path(path) => match path.path.segments.first() {
+                                Some(seg) => &seg.ident,
+                                _ => panic!("Can't find ident"),
+                            },
                             _ => panic!("Can't find ident"),
-                        },
-                        _ => panic!("Can't find ident"),
-                    };
-                    let layer_ty = Ident::new(&format!("{}Layer", ty_id), ty_id.span());
+                        };
+                        let layer_ty = Ident::new(&format!("{}Layer", ty_id), ty_id.span());
 
-                    // let layer_subtype = Ident::new(&format!("{:?}Layer", subtype), subtype.span());
-                    quote! {
-                        #[serde(default, skip_serializing_if = "Option::is_none")]
-                        #name: Option<#layer_ty>,
+                        // let layer_subtype = Ident::new(&format!("{:?}Layer", subtype), subtype.span());
+                        quote! {
+                            #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #name: Option<#layer_ty>,
+                        }
                     }
-                },
-                (false, true, Some(..)) => {
-                    panic!("Subtype not extracted {:?} {:?}", name, ty);
+                    (false, true, Some(..)) => {
+                        panic!("Subtype not extracted {:?} {:?}", name, ty);
+                    }
                 }
-            }
-        }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
-        let default_field_list = fields.into_iter().map(|f| {
-            let name = &f.ident;
+        let default_field_list = fields
+            .into_iter()
+            .map(|f| {
+                let name = &f.ident;
 
-            quote! {
-                #name: None,
-            }
-        }).collect::<Vec<_>>();
+                quote! {
+                    #name: None,
+                }
+            })
+            .collect::<Vec<_>>();
 
         quote! {
             impl layeredconf::LayeredConfSolid for #ident {
@@ -152,7 +168,11 @@ impl LayeredConfStruct {
         }
     }
 
-    fn to_merge_tokens(&self, ident: &Ident, data: &ast::Data<Ignored, LayeredConfField>) -> proc_macro2::TokenStream {
+    fn to_merge_tokens(
+        &self,
+        ident: &Ident,
+        data: &ast::Data<Ignored, LayeredConfField>,
+    ) -> proc_macro2::TokenStream {
         let layer_ident = Ident::new(&format!("{}Layer", ident), ident.span());
 
         let fields = data
@@ -161,26 +181,29 @@ impl LayeredConfStruct {
             .expect("Should never be enum")
             .fields;
 
-        let field_list = fields.into_iter().map(|f| {
-            let name = &f.ident;
-            if f.subconfig {
-                quote! {
-                    if self.#name.is_none() {
-                        self.#name = other.#name.clone();
-                    } else if let Some(other) = &other.#name {
-                        self.#name.as_mut().unwrap().merge_from(other);
+        let field_list = fields
+            .into_iter()
+            .map(|f| {
+                let name = &f.ident;
+                if f.subconfig {
+                    quote! {
+                        if self.#name.is_none() {
+                            self.#name = other.#name.clone();
+                        } else if let Some(other) = &other.#name {
+                            self.#name.as_mut().unwrap().merge_from(other);
+                        }
+                    }
+                } else {
+                    quote! {
+                        if self.#name.is_none() {
+                            self.#name = other.#name.clone();
+                        }
                     }
                 }
-            } else {
-                quote! {
-                    if self.#name.is_none() {
-                        self.#name = other.#name.clone();
-                    }
-                }
-            }
-        }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
-        quote!{
+        quote! {
             impl layeredconf::LayeredConfMerge<#layer_ident> for #layer_ident {
                 fn merge_from(&mut self, other: &#layer_ident) {
                     #(#field_list)*
@@ -189,7 +212,11 @@ impl LayeredConfStruct {
         }
     }
 
-    fn to_solidify_tokens(&self, ident: &Ident, data: &ast::Data<Ignored, LayeredConfField>) -> proc_macro2::TokenStream {
+    fn to_solidify_tokens(
+        &self,
+        ident: &Ident,
+        data: &ast::Data<Ignored, LayeredConfField>,
+    ) -> proc_macro2::TokenStream {
         let layer_ident = Ident::new(&format!("{}Layer", ident), ident.span());
 
         let fields = data
@@ -198,30 +225,32 @@ impl LayeredConfStruct {
             .expect("Should never be enum")
             .fields;
 
-        let field_list = fields.clone().into_iter().map(|f| {
-            let name = &f.ident;
-            let name_str = name.as_ref().map(|id| id.to_string());
-            let ty = &f.ty;
+        let field_list = fields
+            .clone()
+            .into_iter()
+            .map(|f| {
+                let name = &f.ident;
+                let name_str = name.as_ref().map(|id| id.to_string());
+                let ty = &f.ty;
 
-            let option = self.is_option(ty);
+                let option = self.is_option(ty);
 
-            if option {
-                if f.subconfig {
-                    quote! {
-                        let #name;
-                        if let Some(v) = &self.#name {
-                            #name = Some(v.solidify());
-                        } else {
-                            #name = None;
+                if option {
+                    if f.subconfig {
+                        quote! {
+                            let #name;
+                            if let Some(v) = &self.#name {
+                                #name = Some(v.solidify());
+                            } else {
+                                #name = None;
+                            }
                         }
-=                    }
-                } else {
-                    quote! {
-                        let #name = self.#name.clone();
+                    } else {
+                        quote! {
+                            let #name = self.#name.clone();
+                        }
                     }
-                }
-            } else {
-                if f.subconfig {
+                } else if f.subconfig {
                     quote! {
                         let #name;
                         if let Some(val) = &self.#name {
@@ -242,26 +271,29 @@ impl LayeredConfStruct {
                         }
                     }
                 }
-            }
-        }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
-        let field_destructure = fields.into_iter().map(|f| {
-            let name = &f.ident;
-            let ty = &f.ty;
-            let option = self.is_option(ty);
+        let field_destructure = fields
+            .into_iter()
+            .map(|f| {
+                let name = &f.ident;
+                let ty = &f.ty;
+                let option = self.is_option(ty);
 
-            if option {
-                quote!{
-                    #name,
+                if option {
+                    quote! {
+                        #name,
+                    }
+                } else {
+                    quote! {
+                        #name: #name.unwrap(),
+                    }
                 }
-            } else {
-                quote!{
-                    #name: #name.unwrap(),
-                }
-            }
-        }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
-        quote!{
+        quote! {
             impl layeredconf::LayeredConfSolidify<#ident> for #layer_ident {
                 fn solidify(&self) -> layeredconf::Result<#ident> {
                     let mut missing = vec![];
@@ -323,7 +355,7 @@ mod test {
     use darling::FromDeriveInput;
     use quote::quote;
 
-    use super::{LayeredConfStruct};
+    use super::LayeredConfStruct;
 
     #[test]
     fn test() {
