@@ -1,13 +1,18 @@
+#[cfg(test)]
+mod test_util;
+
+use std::vec;
+
 use darling::{
     ast::{self},
     util::{self, Ignored},
     FromDeriveInput, FromField, FromMeta, ToTokens,
 };
 use proc_macro::{self, TokenStream};
-use quote::quote;
-use syn::{parse_macro_input, GenericArgument, Ident, Path, PathArguments, Type};
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, Attribute, GenericArgument, Ident, Path, PathArguments, Type};
 
-#[proc_macro_derive(LayeredConf, attributes(confstruct))]
+#[proc_macro_derive(LayeredConf, attributes(layered))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
     let conf_struct = LayeredConfStruct::from_derive_input(&input).expect("Wrong options");
@@ -18,10 +23,15 @@ pub fn derive(input: TokenStream) -> TokenStream {
 }
 
 #[derive(Debug, FromDeriveInput)]
-#[darling(attributes(confstruct), supports(struct_named))]
+#[darling(
+    attributes(layered),
+    forward_attrs(clap, serde),
+    supports(struct_named)
+)]
 struct LayeredConfStruct {
     ident: Ident,
     data: ast::Data<util::Ignored, LayeredConfField>,
+    attrs: Vec<syn::Attribute>,
 }
 
 impl LayeredConfStruct {
@@ -63,8 +73,9 @@ impl LayeredConfStruct {
         &self,
         ident: &Ident,
         data: &ast::Data<Ignored, LayeredConfField>,
+        attrs: &[Attribute],
     ) -> proc_macro2::TokenStream {
-        let layer_ident = Ident::new(&format!("{}Layer", ident), ident.span());
+        let layer_ident = format_ident!("{}Layer", ident);
 
         let fields = data
             .as_ref()
@@ -79,6 +90,12 @@ impl LayeredConfStruct {
                 let name = &f.ident;
                 let ty = &f.ty;
 
+                let attrs = f
+                    .attrs
+                    .iter()
+                    .map(|a| a.into_token_stream())
+                    .collect::<Vec<_>>();
+
                 let option = self.is_option(ty);
                 let subtype = if option { self.extract_type(ty) } else { None };
                 let subconfig = f.subconfig;
@@ -86,6 +103,7 @@ impl LayeredConfStruct {
                     (true, false, _) => {
                         quote! {
                             #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #(#attrs)*
                             #name: #ty,
                         }
                     }
@@ -97,10 +115,10 @@ impl LayeredConfStruct {
                             },
                             _ => panic!("Can't find ident"),
                         };
-                        let layer_subtype =
-                            Ident::new(&format!("{}Layer", subtype_id), subtype_id.span());
+                        let layer_subtype = format_ident!("{}Layer", subtype_id);
                         quote! {
                             #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #(#attrs)*
                             #name: Option<#layer_subtype>,
                         }
                     }
@@ -110,6 +128,7 @@ impl LayeredConfStruct {
                     (false, false, _) => {
                         quote! {
                             #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #(#attrs)*
                             #name: Option<#ty>,
                         }
                     }
@@ -121,11 +140,11 @@ impl LayeredConfStruct {
                             },
                             _ => panic!("Can't find ident"),
                         };
-                        let layer_ty = Ident::new(&format!("{}Layer", ty_id), ty_id.span());
+                        let layer_ty = format_ident!("{}Layer", ty_id);
 
-                        // let layer_subtype = Ident::new(&format!("{:?}Layer", subtype), subtype.span());
                         quote! {
                             #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #(#attrs)*
                             #name: Option<#layer_ty>,
                         }
                     }
@@ -147,6 +166,11 @@ impl LayeredConfStruct {
             })
             .collect::<Vec<_>>();
 
+        let container_attrs = attrs
+            .iter()
+            .map(|a| a.into_token_stream())
+            .collect::<Vec<_>>();
+
         quote! {
             impl layeredconf::LayeredConfSolid for #ident {
                 type Layer = #layer_ident;
@@ -155,6 +179,7 @@ impl LayeredConfStruct {
                 type Config = #ident;
             }
             #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+            #(#container_attrs)*
             struct #layer_ident {
                 #(#option_field_list)*
             }
@@ -173,7 +198,7 @@ impl LayeredConfStruct {
         ident: &Ident,
         data: &ast::Data<Ignored, LayeredConfField>,
     ) -> proc_macro2::TokenStream {
-        let layer_ident = Ident::new(&format!("{}Layer", ident), ident.span());
+        let layer_ident = format_ident!("{}Layer", ident);
 
         let fields = data
             .as_ref()
@@ -217,7 +242,7 @@ impl LayeredConfStruct {
         ident: &Ident,
         data: &ast::Data<Ignored, LayeredConfField>,
     ) -> proc_macro2::TokenStream {
-        let layer_ident = Ident::new(&format!("{}Layer", ident), ident.span());
+        let layer_ident = format_ident!("{}Layer", ident);
 
         let fields = data
             .as_ref()
@@ -319,21 +344,24 @@ impl ToTokens for LayeredConfStruct {
         let LayeredConfStruct {
             ref ident,
             ref data,
+            ref attrs,
+            ..
         } = *self;
 
-        tokens.extend(self.to_layer_tokens(ident, data));
+        tokens.extend(self.to_layer_tokens(ident, data, attrs));
         tokens.extend(self.to_merge_tokens(ident, data));
         tokens.extend(self.to_solidify_tokens(ident, data));
     }
 }
 
 #[derive(Debug, FromField)]
-#[darling(attributes(confstruct))]
+#[darling(attributes(layered), forward_attrs(clap, serde))]
 struct LayeredConfField {
     ident: Option<Ident>,
     ty: Type,
-    #[darling(default)]
-    skip: LayeredConfFieldSkip,
+    attrs: Vec<syn::Attribute>,
+
+    // Our attrs
     #[darling(default)]
     subconfig: bool,
 }
@@ -352,13 +380,19 @@ impl std::default::Default for LayeredConfFieldSkip {
 
 #[cfg(test)]
 mod test {
+    use std::io::Write;
+
     use darling::FromDeriveInput;
+    use goldenfile::Mint;
     use quote::quote;
 
-    use super::LayeredConfStruct;
+    use crate::{test_util::rustfmt_ext, LayeredConfStruct};
 
     #[test]
-    fn test() {
+    fn test() -> anyhow::Result<()> {
+        let mut mint = Mint::new("tests/goldenfiles");
+        let mut file = mint.new_goldenfile("test.rs")?;
+
         let good_input = r#"
 #[derive(LayeredConf)]
 struct Test{
@@ -366,12 +400,55 @@ struct Test{
     integer: u64,
 }
 "#;
-        let parsed = syn::parse_str(good_input).unwrap();
+        let parsed = syn::parse_str(good_input)?;
         let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
 
-        // println!("{:?}", conf_struct.data.take_struct().unwrap().fields);
+        file.write_all(rustfmt_ext(quote!(#conf_struct))?.as_bytes())?;
 
-        println!("{}", quote!(#conf_struct));
-        // assert!(false)
+        Ok(())
+    }
+
+    #[test]
+    fn test_option() -> anyhow::Result<()> {
+        let mut mint = Mint::new("tests/goldenfiles");
+        let mut file = mint.new_goldenfile("test_option.rs")?;
+
+        let good_input = r#"
+#[derive(LayeredConf)]
+struct Test{
+    boolean: bool,
+    integer: u64,
+    optional: Option<String>,
+}
+"#;
+        let parsed = syn::parse_str(good_input)?;
+        let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
+
+        file.write_all(rustfmt_ext(quote!(#conf_struct))?.as_bytes())?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_passes_serde_attributes() -> anyhow::Result<()> {
+        let mut mint = Mint::new("tests/goldenfiles");
+        let mut file = mint.new_goldenfile("test_passes_serde_attributes.rs")?;
+
+        let good_input = r#"
+#[derive(LayeredConf, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Test{
+    #[serde(rename = "bool")]
+    boolean: bool,
+    integer: u64,
+    optional: Option<String>,
+}
+"#;
+        let parsed = syn::parse_str(good_input)?;
+        let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
+
+        file.write_all(rustfmt_ext(quote!(#conf_struct))?.as_bytes())?;
+
+        Ok(())
     }
 }

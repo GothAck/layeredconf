@@ -10,7 +10,7 @@ struct Config {
     name: String,
     data_path: PathBuf,
     optional: Option<String>,
-    #[confstruct(subconfig)]
+    #[layered(subconfig)]
     subconfig: SubConfig,
 }
 
