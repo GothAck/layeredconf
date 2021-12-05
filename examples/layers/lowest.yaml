@@ -1,0 +1,12 @@
+name: Default Name
+
+optional: null
+
+vec:
+  - Zero
+  - One
+  - Two
+  - Three
+
+twitter:
+  rate_limit: 32

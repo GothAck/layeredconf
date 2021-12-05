@@ -19,6 +19,9 @@ thiserror = "1.0"
 
 layeredconf-derive = { version = "0.1.0" }
 
+[dev-dependencies]
+anyhow = "1.0"
+
 [workspace]
 members = [".", "layeredconf-derive"]
 
