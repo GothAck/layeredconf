@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -155,47 +156,41 @@ where
         Ok(())
     }
 
-    fn auto_format(&self, path: &Path, format: &Format) -> Result<Format> {
-        match format {
-            Format::Auto => {
-                let extension = path.extension().map(|s| s.to_str()).flatten();
-                match extension {
-                    Some("json") => Ok(Format::Json),
-                    Some("toml") => Ok(Format::Toml),
-                    Some("yaml") => Ok(Format::Yaml),
-                    _ => Err(Error::UnknownExtension {
-                        extension: extension.map(|s| s.to_string()),
-                    }),
-                }
-            }
-            format => Ok(*format),
-        }
-    }
-
-    pub fn load(&self) -> super::Result<()> {
+    fn load_impl(&self, seen_paths: &mut HashSet<PathBuf>) -> super::Result<()> {
         let mut obj = self.obj.lock().unwrap();
         let mut sub_layers = self.sub_layers.lock().unwrap();
 
         *obj = match &self.source {
             Source::File { path, format } => {
-                let string = std::fs::read_to_string(path)?;
+                let path = self.canonicalize(path)?;
+                if seen_paths.contains(&path) {
+                    return Err(Error::LoopingLoadConfig);
+                }
 
-                match self.auto_format(path, format)? {
+                let string = std::fs::read_to_string(&path)?;
+                match self.auto_format(&path, format)? {
                     Format::Auto => return Err(Error::AutoFormatFailed),
                     Format::Json => serde_json::from_str(&string)?,
                     Format::Toml => toml::from_str(&string)?,
                     Format::Yaml => serde_yaml::from_str(&string)?,
                 }
             }
-            Source::FileOptional { path, format } => match std::fs::read_to_string(path) {
-                Ok(string) => match self.auto_format(path, format)? {
-                    Format::Auto => return Err(Error::AutoFormatFailed),
-                    Format::Json => serde_json::from_str(&string)?,
-                    Format::Toml => toml::from_str(&string)?,
-                    Format::Yaml => serde_yaml::from_str(&string)?,
-                },
-                Err(_) => <TSolid>::Layer::default(),
-            },
+            Source::FileOptional { path, format } => {
+                let path = self.canonicalize(path)?;
+                if seen_paths.contains(&path) {
+                    return Err(Error::LoopingLoadConfig);
+                }
+
+                match std::fs::read_to_string(&path) {
+                    Ok(string) => match self.auto_format(&path, format)? {
+                        Format::Auto => return Err(Error::AutoFormatFailed),
+                        Format::Json => serde_json::from_str(&string)?,
+                        Format::Toml => toml::from_str(&string)?,
+                        Format::Yaml => serde_yaml::from_str(&string)?,
+                    },
+                    Err(_) => <TSolid>::Layer::default(),
+                }
+            }
             Source::String { str, format } => match format {
                 Format::Auto => return Err(Error::AutoFormatFailed),
                 Format::Json => serde_json::from_str(str)?,
@@ -222,12 +217,38 @@ where
             .collect();
 
         for sub_layer in sub_layers.iter() {
-            sub_layer.load()?;
+            sub_layer.load_impl(seen_paths)?;
         }
 
         self.loaded.store(true, Ordering::Relaxed);
 
         Ok(())
+    }
+
+    fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
+        std::fs::canonicalize(path).map_err(|wrapped| Error::IoError { wrapped })
+    }
+
+    fn auto_format(&self, path: &Path, format: &Format) -> Result<Format> {
+        match format {
+            Format::Auto => {
+                let extension = path.extension().map(|s| s.to_str()).flatten();
+                match extension {
+                    Some("json") => Ok(Format::Json),
+                    Some("toml") => Ok(Format::Toml),
+                    Some("yaml") => Ok(Format::Yaml),
+                    _ => Err(Error::UnknownExtension {
+                        extension: extension.map(|s| s.to_string()),
+                    }),
+                }
+            }
+            format => Ok(*format),
+        }
+    }
+
+    pub fn load(&self) -> super::Result<()> {
+        let mut seen_paths = HashSet::new();
+        self.load_impl(&mut seen_paths)
     }
 }
 

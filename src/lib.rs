@@ -18,6 +18,8 @@ pub enum Error {
     UnknownExtension { extension: Option<String> },
     #[error("Auto format detection failed")]
     AutoFormatFailed,
+    #[error("Loop detected loading config files")]
+    LoopingLoadConfig,
     #[error("I/O Error {wrapped:?}")]
     IoError { wrapped: std::io::Error },
     #[error("Json Error {wrapped:?}")]
