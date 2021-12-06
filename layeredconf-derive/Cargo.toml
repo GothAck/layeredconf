@@ -6,7 +6,7 @@ description = "Layered configeration files, deserialized with serde"
 repository = "https://github.com/GothAck/layeredconf"
 documentation = "https://docs.rs/layeredconf"
 categories = ["config", "encoding", "parsing"]
-readme = "../README.md"
+readme = "README.md"
 license = "MIT"
 edition = "2021"
 

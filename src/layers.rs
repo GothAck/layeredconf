@@ -1,3 +1,5 @@
+//! Builds a Config from layers
+
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -13,6 +15,7 @@ use crate::{map_canonicalization_error, map_io_error, Error};
 
 use super::{LayeredConfLayer, LayeredConfMerge, LayeredConfSolid, LayeredConfSolidify, Result};
 
+/// Builds a layered configuration
 #[derive(Debug)]
 pub struct Builder<TSolid>
 where
@@ -45,16 +48,19 @@ where
         + clap::Parser
         + Sized,
 {
+    /// Returns a new Builder
     pub fn new() -> Self {
         Self { layers: vec![] }
     }
 
-    pub fn new_layer(&mut self, source: Source) -> Arc<Layer<TSolid>> {
+    /// Adds a new Layer to the Builder from a source
+    pub fn new_layer(&mut self, source: Source) -> &mut Self {
         let layer = Arc::from(Layer::new(source));
-        self.layers.push(layer.clone());
-        layer
+        self.layers.push(layer);
+        self
     }
 
+    /// Loads all the config sources defined in the builder
     pub fn load_all(&self) -> Result<()> {
         for layer in self.layers.iter() {
             layer.load()?;
@@ -62,6 +68,7 @@ where
         Ok(())
     }
 
+    /// Solidifies the Builder ingo a Config
     pub fn solidify(&self) -> Result<TSolid> {
         if self.layers.is_empty() {
             return Err(Error::SolidifyFailedNoLayers);
@@ -102,7 +109,7 @@ where
 }
 
 #[derive(Debug)]
-pub struct Layer<TSolid>
+struct Layer<TSolid>
 where
     TSolid: LayeredConfSolid,
     <TSolid>::Layer: LayeredConfLayer
@@ -266,20 +273,50 @@ where
     }
 }
 
+/// Config file format
 #[derive(Debug, Clone, Copy)]
 pub enum Format {
+    /// Automatically detect config file format from it's extension
     Auto,
+    /// JSON formatted
     Json,
+    /// TOML formatted
     Toml,
+    /// YAML formatted
     Yaml,
 }
 
+/// Config source
 #[derive(Debug)]
 pub enum Source {
-    File { path: PathBuf, format: Format },
-    FileOptional { path: PathBuf, format: Format },
-    String { str: String, format: Format },
-    Environment { prefix: Option<String> },
+    /// From a file
+    File {
+        /// File path
+        path: PathBuf,
+        /// File format
+        format: Format,
+    },
+    /// From a file, ignoring if it doesn't exist
+    FileOptional {
+        /// File path
+        path: PathBuf,
+        /// File format
+        format: Format,
+    },
+    /// From a String
+    String {
+        /// String contents
+        str: String,
+        /// Format
+        format: Format,
+    },
+    /// From process env (currently unimplemented)
+    Environment {
+        /// Optional prefix for environment variables
+        prefix: Option<String>,
+    },
+    /// From argv
     Arguments,
+    /// From an Vec of arguments
     ArgumentsFrom(Vec<String>),
 }

@@ -1,3 +1,9 @@
+#![deny(missing_docs)]
+
+//!# [LayeredConf](https://crates.io/crates/layeredconf) Derive Macro
+//!
+//!## Yet Another Config Package
+
 #[cfg(test)]
 mod test_util;
 
@@ -12,6 +18,27 @@ use proc_macro::{self, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Attribute, GenericArgument, Ident, Path, PathArguments, Type};
 
+/// LayeredConf Derive Macro
+///
+/// ```rust
+/// #[derive(LayeredConf, serde::Deserialize)]
+/// struct Config {
+///     #[layered(load_config)]
+///     #[clap(long)]
+///     config: Option<PathBuf>,
+///     #[clap(long)]
+///     name: String,
+///     #[layered(subconfig)]
+///     subconfig: SubConfig,
+/// }
+///
+/// #[derive(LayeredConf, serde::Deserialize)]
+/// #[layered(subconfig)]
+/// struct SubConfig {
+///     #[clap(long)]
+///     sub_name: String.
+/// }
+/// ```
 #[proc_macro_derive(LayeredConf, attributes(layered, clap))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
