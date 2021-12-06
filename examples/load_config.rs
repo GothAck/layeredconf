@@ -1,9 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use layeredconf::{
-    layers::{Builder, Format, Source},
-    LayeredConf,
-};
+use layeredconf::{Builder, Format, LayeredConf, Source};
 use serde::{Deserialize, Serialize};
 
 #[derive(LayeredConf, Deserialize, Serialize, Debug)]

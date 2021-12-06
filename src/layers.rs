@@ -16,6 +16,25 @@ use crate::{map_canonicalization_error, map_io_error, Error};
 use super::{LayeredConfLayer, LayeredConfMerge, LayeredConfSolid, LayeredConfSolidify, Result};
 
 /// Builds a layered configuration
+///
+/// ```rust
+/// use std::path::PathBuf;
+///
+/// use layeredconf::{Builder, Format, LayeredConf, Source};
+///
+/// #[derive(LayeredConf, serde::Deserialize)]
+/// struct Config {
+///     name: String,
+/// }
+///
+/// fn main() -> anyhow::Result<()> {
+///     let config: Config = Builder::new()
+///         .new_layer(Source::String { str: "{ \"name\": \"test\" }".to_string(), format: Format::Json })
+///         .solidify()?;
+///
+///     Ok(())
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Builder<TSolid>
 where

@@ -8,12 +8,39 @@
 //!- More Documentation
 //!- Features
 
-pub mod layers;
+mod layers;
 
 use std::path::{Path, PathBuf};
 
 use thiserror::Error as ThisError;
 
+pub use layers::{Builder, Format, Source};
+
+/// LayeredConf Derive Macro
+///
+/// ```rust
+/// use std::path::PathBuf;
+///
+/// use layeredconf::LayeredConf;
+///
+/// #[derive(LayeredConf, serde::Deserialize)]
+/// struct Config {
+///     #[layered(load_config)]
+///     #[clap(long)]
+///     config: Option<PathBuf>,
+///     #[clap(long)]
+///     name: String,
+///     #[layered(subconfig)]
+///     subconfig: SubConfig,
+/// }
+///
+/// #[derive(LayeredConf, serde::Deserialize)]
+/// #[layered(subconfig)]
+/// struct SubConfig {
+///     #[clap(long)]
+///     sub_name: String,
+/// }
+/// ```
 pub use layeredconf_derive::LayeredConf;
 
 /// LayeredConf Result

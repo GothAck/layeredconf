@@ -2,7 +2,7 @@ use std::{path::PathBuf, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use layeredconf::{layers::*, LayeredConf, LayeredConfMerge, LayeredConfSolidify};
+use layeredconf::{Builder, Format, LayeredConf, LayeredConfMerge, LayeredConfSolidify, Source};
 
 #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
 struct Config {
