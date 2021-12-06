@@ -1,6 +1,6 @@
 pub mod layers;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use thiserror::Error as ThisError;
 
@@ -20,8 +20,16 @@ pub enum Error {
     AutoFormatFailed,
     #[error("Loop detected loading config files")]
     LoopingLoadConfig,
-    #[error("I/O Error {wrapped:?}")]
-    IoError { wrapped: std::io::Error },
+    #[error("Path canonicalization error {wrapped:?} for {path:?}")]
+    PathCanonicalization {
+        wrapped: std::io::Error,
+        path: PathBuf,
+    },
+    #[error("I/O Error {wrapped:?} for {path:?}")]
+    IoError {
+        wrapped: std::io::Error,
+        path: PathBuf,
+    },
     #[error("Json Error {wrapped:?}")]
     JsonError { wrapped: serde_json::Error },
     #[error("Toml Error {wrapped:?}")]
@@ -30,9 +38,17 @@ pub enum Error {
     YamlError { wrapped: serde_yaml::Error },
 }
 
-impl From<std::io::Error> for Error {
-    fn from(wrapped: std::io::Error) -> Self {
-        Error::IoError { wrapped }
+pub(crate) fn map_io_error(path: &'_ Path) -> impl Fn(std::io::Error) -> Error + '_ {
+    move |wrapped| Error::IoError {
+        wrapped,
+        path: path.to_path_buf(),
+    }
+}
+
+pub(crate) fn map_canonicalization_error(path: &'_ Path) -> impl Fn(std::io::Error) -> Error + '_ {
+    move |wrapped| Error::IoError {
+        wrapped,
+        path: path.to_path_buf(),
     }
 }
 

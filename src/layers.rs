@@ -9,7 +9,7 @@ use std::{
 
 use clap::Parser;
 
-use crate::Error;
+use crate::{map_canonicalization_error, map_io_error, Error};
 
 use super::{LayeredConfLayer, LayeredConfMerge, LayeredConfSolid, LayeredConfSolidify, Result};
 
@@ -162,12 +162,16 @@ where
 
         *obj = match &self.source {
             Source::File { path, format } => {
-                let path = self.canonicalize(path)?;
+                let path = self
+                    .canonicalize(path)
+                    .map_err(map_canonicalization_error(path))?;
+
                 if seen_paths.contains(&path) {
                     return Err(Error::LoopingLoadConfig);
                 }
 
-                let string = std::fs::read_to_string(&path)?;
+                let string = std::fs::read_to_string(&path).map_err(map_io_error(&path))?;
+
                 match self.auto_format(&path, format)? {
                     Format::Auto => return Err(Error::AutoFormatFailed),
                     Format::Json => serde_json::from_str(&string)?,
@@ -175,22 +179,32 @@ where
                     Format::Yaml => serde_yaml::from_str(&string)?,
                 }
             }
-            Source::FileOptional { path, format } => {
-                let path = self.canonicalize(path)?;
-                if seen_paths.contains(&path) {
-                    return Err(Error::LoopingLoadConfig);
-                }
+            Source::FileOptional { path, format } => match self.canonicalize(path) {
+                Err(error) => match error.kind() {
+                    std::io::ErrorKind::NotFound => <TSolid>::Layer::default(),
+                    _ => {
+                        return Err(Error::IoError {
+                            wrapped: error,
+                            path: path.to_path_buf(),
+                        })
+                    }
+                },
+                Ok(path) => {
+                    if seen_paths.contains(&path) {
+                        return Err(Error::LoopingLoadConfig);
+                    }
 
-                match std::fs::read_to_string(&path) {
-                    Ok(string) => match self.auto_format(&path, format)? {
-                        Format::Auto => return Err(Error::AutoFormatFailed),
-                        Format::Json => serde_json::from_str(&string)?,
-                        Format::Toml => toml::from_str(&string)?,
-                        Format::Yaml => serde_yaml::from_str(&string)?,
-                    },
-                    Err(_) => <TSolid>::Layer::default(),
+                    match std::fs::read_to_string(&path) {
+                        Ok(string) => match self.auto_format(&path, format)? {
+                            Format::Auto => return Err(Error::AutoFormatFailed),
+                            Format::Json => serde_json::from_str(&string)?,
+                            Format::Toml => toml::from_str(&string)?,
+                            Format::Yaml => serde_yaml::from_str(&string)?,
+                        },
+                        Err(_) => <TSolid>::Layer::default(),
+                    }
                 }
-            }
+            },
             Source::String { str, format } => match format {
                 Format::Auto => return Err(Error::AutoFormatFailed),
                 Format::Json => serde_json::from_str(str)?,
@@ -225,8 +239,8 @@ where
         Ok(())
     }
 
-    fn canonicalize<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
-        std::fs::canonicalize(path).map_err(|wrapped| Error::IoError { wrapped })
+    fn canonicalize(&self, path: &Path) -> std::io::Result<PathBuf> {
+        std::fs::canonicalize(path)
     }
 
     fn auto_format(&self, path: &Path, format: &Format) -> Result<Format> {
