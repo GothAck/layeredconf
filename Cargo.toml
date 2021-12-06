@@ -1,6 +1,6 @@
 [package]
 name = "layeredconf"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Greg \"GothAck\" Miell <rust@greg.gothack.ninja>"]
 description = "Layered configeration files, deserialized with serde"
 repository = "https://github.com/GothAck/layeredconf"
@@ -18,7 +18,7 @@ serde_json = "1.0"
 toml = { version = "0.5" }
 thiserror = "1.0"
 
-layeredconf-derive = { version = "0.1.0" }
+layeredconf-derive = { version = "0.1.1" }
 
 [dev-dependencies]
 anyhow = "1.0"
