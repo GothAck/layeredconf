@@ -12,7 +12,7 @@ use proc_macro::{self, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Attribute, GenericArgument, Ident, Path, PathArguments, Type};
 
-#[proc_macro_derive(LayeredConf, attributes(layered))]
+#[proc_macro_derive(LayeredConf, attributes(layered, clap))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
     let conf_struct = LayeredConfStruct::from_derive_input(&input).expect("Wrong options");
@@ -32,6 +32,9 @@ struct LayeredConfStruct {
     ident: Ident,
     data: ast::Data<util::Ignored, LayeredConfField>,
     attrs: Vec<syn::Attribute>,
+
+    #[darling(default)]
+    subconfig: bool,
 }
 
 impl LayeredConfStruct {
@@ -107,20 +110,8 @@ impl LayeredConfStruct {
                             #name: #ty,
                         }
                     }
-                    (true, true, Some(subtype)) => {
-                        let subtype_id = match &subtype {
-                            Type::Path(path) => match path.path.segments.first() {
-                                Some(seg) => &seg.ident,
-                                _ => panic!("Can't find ident"),
-                            },
-                            _ => panic!("Can't find ident"),
-                        };
-                        let layer_subtype = format_ident!("{}Layer", subtype_id);
-                        quote! {
-                            #[serde(default, skip_serializing_if = "Option::is_none")]
-                            #(#attrs)*
-                            #name: Option<#layer_subtype>,
-                        }
+                    (true, true, Some(_)) => {
+                        panic!("layered(subconfig) should not be wrapped in Option")
                     }
                     (true, true, None) => {
                         panic!("Subtype not extracted {:?} {:?}", name, ty);
@@ -142,10 +133,13 @@ impl LayeredConfStruct {
                         };
                         let layer_ty = format_ident!("{}Layer", ty_id);
 
+                        let skip_serializing_if = quote! { #layer_ty::empty }.to_string();
+
                         quote! {
-                            #[serde(default, skip_serializing_if = "Option::is_none")]
+                            #[serde(default, skip_serializing_if = #skip_serializing_if)]
+                            #[clap(flatten)]
                             #(#attrs)*
-                            #name: Option<#layer_ty>,
+                            #name: #layer_ty,
                         }
                     }
                     (false, true, Some(..)) => {
@@ -156,12 +150,48 @@ impl LayeredConfStruct {
             .collect::<Vec<_>>();
 
         let default_field_list = fields
+            .clone()
             .into_iter()
             .map(|f| {
                 let name = &f.ident;
+                let ty = &f.ty;
+                let subconfig = f.subconfig;
 
-                quote! {
-                    #name: None,
+                let ty_id = match &ty {
+                    Type::Path(path) => match path.path.segments.first() {
+                        Some(seg) => &seg.ident,
+                        _ => panic!("Can't find ident"),
+                    },
+                    _ => panic!("Can't find ident"),
+                };
+                let layer_ident = format_ident!("{}Layer", ty_id);
+
+                if subconfig {
+                    quote! {
+                        #name: #layer_ident::default(),
+                    }
+                } else {
+                    quote! {
+                        #name: None,
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let empty_field_list = fields
+            .into_iter()
+            .map(|f| {
+                let ident = &f.ident;
+                let subconfig = f.subconfig;
+
+                if subconfig {
+                    quote! {
+                        empty.push(self.#ident.empty());
+                    }
+                } else {
+                    quote! {
+                        empty.push(self.#ident.is_none());
+                    }
                 }
             })
             .collect::<Vec<_>>();
@@ -171,6 +201,12 @@ impl LayeredConfStruct {
             .map(|a| a.into_token_stream())
             .collect::<Vec<_>>();
 
+        let clap_derive = if self.subconfig {
+            quote! { clap:: Args }
+        } else {
+            quote! { clap::Parser }
+        };
+
         quote! {
             impl layeredconf::LayeredConfSolid for #ident {
                 type Layer = #layer_ident;
@@ -178,11 +214,23 @@ impl LayeredConfStruct {
             impl layeredconf::LayeredConfLayer for #layer_ident {
                 type Config = #ident;
             }
-            #[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+
+            #[derive(serde::Deserialize, serde::Serialize, #clap_derive, Clone, Debug)]
             #(#container_attrs)*
             struct #layer_ident {
                 #(#option_field_list)*
             }
+
+            impl #layer_ident {
+                fn empty(&self) -> bool {
+                    let mut empty = vec![];
+
+                    #(#empty_field_list)*
+
+                    empty.iter().all(|v| *v)
+                }
+            }
+
             impl std::default::Default for #layer_ident {
                 fn default() -> Self {
                     Self {
@@ -209,19 +257,15 @@ impl LayeredConfStruct {
         let field_list = fields
             .into_iter()
             .map(|f| {
-                let name = &f.ident;
+                let ident = &f.ident;
                 if f.subconfig {
                     quote! {
-                        if self.#name.is_none() {
-                            self.#name = other.#name.clone();
-                        } else if let Some(other) = &other.#name {
-                            self.#name.as_mut().unwrap().merge_from(other);
-                        }
+                        self.#ident.merge_from(&other.#ident);
                     }
                 } else {
                     quote! {
-                        if self.#name.is_none() {
-                            self.#name = other.#name.clone();
+                        if self.#ident.is_none() {
+                            self.#ident = other.#ident.clone();
                         }
                     }
                 }
@@ -262,14 +306,7 @@ impl LayeredConfStruct {
 
                 if option {
                     if f.subconfig {
-                        quote! {
-                            let #name;
-                            if let Some(v) = &self.#name {
-                                #name = Some(v.solidify());
-                            } else {
-                                #name = None;
-                            }
-                        }
+                        panic!("layered(subconfig) shouldn't be wrapped in Option");
                     } else {
                         quote! {
                             let #name = self.#name.clone();
@@ -277,13 +314,7 @@ impl LayeredConfStruct {
                     }
                 } else if f.subconfig {
                     quote! {
-                        let #name;
-                        if let Some(val) = &self.#name {
-                            #name = Some(val.solidify()?);
-                        } else {
-                            #name = None;
-                            missing.push(#name_str.to_string());
-                        }
+                        let #name = self.#name.solidify()?;
                     }
                 } else {
                     quote! {
@@ -306,7 +337,7 @@ impl LayeredConfStruct {
                 let ty = &f.ty;
                 let option = self.is_option(ty);
 
-                if option {
+                if option || f.subconfig {
                     quote! {
                         #name,
                     }

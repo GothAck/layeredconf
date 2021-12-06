@@ -4,7 +4,7 @@ impl layeredconf::LayeredConfSolid for Test {
 impl layeredconf::LayeredConfLayer for TestLayer {
     type Config = Test;
 }
-#[derive(serde :: Deserialize, serde :: Serialize, Clone, Debug)]
+#[derive(serde :: Deserialize, serde :: Serialize, clap :: Parser, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 struct TestLayer {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -14,6 +14,15 @@ struct TestLayer {
     integer: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     optional: Option<String>,
+}
+impl TestLayer {
+    fn empty(&self) -> bool {
+        let mut empty = vec![];
+        empty.push(self.boolean.is_none());
+        empty.push(self.integer.is_none());
+        empty.push(self.optional.is_none());
+        empty.iter().all(|v| *v)
+    }
 }
 impl std::default::Default for TestLayer {
     fn default() -> Self {

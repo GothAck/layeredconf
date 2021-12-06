@@ -6,17 +6,24 @@ use layeredconf::{layers::*, LayeredConf, LayeredConfMerge, LayeredConfSolidify}
 
 #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
 struct Config {
+    #[clap(long)]
     config: String,
+    #[clap(long)]
     name: String,
+    #[clap(long)]
     data_path: PathBuf,
+    #[clap(long)]
     optional: Option<String>,
     #[layered(subconfig)]
     subconfig: SubConfig,
 }
 
 #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
+#[layered(subconfig)]
 struct SubConfig {
+    #[clap(long)]
     flibble: u64,
+    #[clap(skip)]
     duration: Duration,
 }
 
@@ -89,3 +96,6 @@ fn test_layers() {
 
     assert_eq!(serde_json::to_string(&solid).unwrap(), FULL_JSON_SOLID);
 }
+
+#[test]
+fn test_clap() {}

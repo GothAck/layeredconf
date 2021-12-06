@@ -1,6 +1,9 @@
 use std::{
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use crate::Error;
@@ -16,7 +19,11 @@ where
         + LayeredConfSolidify<TSolid>
         + std::fmt::Debug
         + Default
-        + serde::de::DeserializeOwned,
+        + serde::de::DeserializeOwned
+        + clap::FromArgMatches
+        + clap::IntoApp
+        + clap::Parser
+        + Sized,
 {
     layers: Vec<Arc<Layer<TSolid::Layer>>>,
 }
@@ -29,7 +36,11 @@ where
         + LayeredConfSolidify<TSolid>
         + std::fmt::Debug
         + Default
-        + serde::de::DeserializeOwned,
+        + serde::de::DeserializeOwned
+        + clap::FromArgMatches
+        + clap::IntoApp
+        + clap::Parser
+        + Sized,
 {
     pub fn new() -> Self {
         Self { layers: vec![] }
@@ -53,21 +64,19 @@ where
             return Err(Error::SolidifyFailedNoLayers);
         }
         for layer in &self.layers {
-            if !*layer.loaded.read().unwrap() {
+            if !layer.loaded.load(Ordering::Relaxed) {
                 layer.load()?;
             }
         }
-        for (i, layer) in self.layers[0..self.layers.len() - 1]
-            .iter()
-            .enumerate()
-            .rev()
-        {
-            let obj_plus_one = self.layers[i + 1].obj.write().unwrap();
-            let mut obj = layer.obj.write().unwrap();
-            obj.merge_from(&obj_plus_one);
+
+        let mut merged = <TSolid>::Layer::default();
+
+        for layer in self.layers.iter().rev() {
+            let obj = layer.obj.lock().unwrap();
+            merged.merge_from(&obj);
         }
 
-        self.layers[0].obj.read().unwrap().solidify()
+        merged.solidify()
     }
 }
 
@@ -79,7 +88,11 @@ where
         + LayeredConfSolidify<TSolid>
         + std::fmt::Debug
         + Default
-        + serde::de::DeserializeOwned,
+        + serde::de::DeserializeOwned
+        + clap::FromArgMatches
+        + clap::IntoApp
+        + clap::Parser
+        + Sized,
 {
     fn default() -> Self {
         Self::new()
@@ -89,31 +102,56 @@ where
 #[derive(Debug)]
 pub struct Layer<TLayer>
 where
-    TLayer: LayeredConfLayer + std::fmt::Debug + Default + serde::de::DeserializeOwned,
+    TLayer: LayeredConfLayer
+        + std::fmt::Debug
+        + Default
+        + serde::de::DeserializeOwned
+        + clap::FromArgMatches
+        + clap::IntoApp
+        + clap::Parser
+        + Sized,
 {
     source: Source,
-    obj: RwLock<TLayer>,
-    loaded: RwLock<bool>,
+    obj: Mutex<TLayer>,
+    loaded: AtomicBool,
 }
 
 impl<TLayer> Layer<TLayer>
 where
-    TLayer: LayeredConfLayer + std::fmt::Debug + Default + serde::de::DeserializeOwned,
+    TLayer: LayeredConfLayer
+        + std::fmt::Debug
+        + Default
+        + serde::de::DeserializeOwned
+        + clap::FromArgMatches
+        + clap::IntoApp
+        + clap::Parser
+        + Sized,
 {
     fn new(source: Source) -> Self {
         Self {
             source,
-            obj: RwLock::from(TLayer::default()),
-            loaded: RwLock::from(false),
+            obj: Mutex::from(TLayer::default()),
+            loaded: AtomicBool::new(false),
         }
     }
 
     pub fn load(&self) -> super::Result<()> {
-        *self.obj.write().unwrap() = match &self.source {
-            Source::File { path, format } => match format {
-                Format::Json => serde_json::from_reader(std::fs::File::open(path)?)?,
-                Format::Toml => toml::from_str(&std::fs::read_to_string(path)?)?,
-                Format::Yaml => serde_yaml::from_reader(std::fs::File::open(path)?)?,
+        *self.obj.lock().unwrap() = match &self.source {
+            Source::File { path, format } => {
+                let string = std::fs::read_to_string(path)?;
+                match format {
+                    Format::Json => serde_json::from_str(&string)?,
+                    Format::Toml => toml::from_str(&string)?,
+                    Format::Yaml => serde_yaml::from_str(&string)?,
+                }
+            }
+            Source::FileOptional { path, format } => match std::fs::read_to_string(path) {
+                Ok(string) => match format {
+                    Format::Json => serde_json::from_str(&string)?,
+                    Format::Toml => toml::from_str(&string)?,
+                    Format::Yaml => serde_yaml::from_str(&string)?,
+                },
+                Err(_) => TLayer::default(),
             },
             Source::String { str, format } => match format {
                 Format::Json => serde_json::from_str(str)?,
@@ -123,11 +161,9 @@ where
             Source::Environment { prefix: _ } => {
                 unimplemented!();
             }
-            Source::Arguments => {
-                unimplemented!();
-            }
+            Source::Arguments => TLayer::parse(),
         };
-        *self.loaded.write().unwrap() = true;
+        self.loaded.store(true, Ordering::Relaxed);
         Ok(())
     }
 }
@@ -142,6 +178,7 @@ pub enum Format {
 #[derive(Debug)]
 pub enum Source {
     File { path: PathBuf, format: Format },
+    FileOptional { path: PathBuf, format: Format },
     String { str: String, format: Format },
     Environment { prefix: Option<String> },
     Arguments,
