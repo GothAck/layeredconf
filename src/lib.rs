@@ -14,6 +14,10 @@ pub enum Error {
     SolidifyFailedMissing { missing: Vec<String> },
     #[error("Solidify failed, no layers")]
     SolidifyFailedNoLayers,
+    #[error("Unknown extension {extension:?}")]
+    UnknownExtension { extension: Option<String> },
+    #[error("Auto format detection failed")]
+    AutoFormatFailed,
     #[error("I/O Error {wrapped:?}")]
     IoError { wrapped: std::io::Error },
     #[error("Json Error {wrapped:?}")]

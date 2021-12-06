@@ -1,0 +1,8 @@
+{
+  "db": {
+    "uri": "postgres://user:pass@db_here"
+  },
+  "twitter": {
+    "auth_token": "123"
+  }
+}

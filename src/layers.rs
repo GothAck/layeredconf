@@ -1,5 +1,5 @@
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -155,6 +155,23 @@ where
         Ok(())
     }
 
+    fn auto_format(&self, path: &Path, format: &Format) -> Result<Format> {
+        match format {
+            Format::Auto => {
+                let extension = path.extension().map(|s| s.to_str()).flatten();
+                match extension {
+                    Some("json") => Ok(Format::Json),
+                    Some("toml") => Ok(Format::Toml),
+                    Some("yaml") => Ok(Format::Yaml),
+                    _ => Err(Error::UnknownExtension {
+                        extension: extension.map(|s| s.to_string()),
+                    }),
+                }
+            }
+            format => Ok(*format),
+        }
+    }
+
     pub fn load(&self) -> super::Result<()> {
         let mut obj = self.obj.lock().unwrap();
         let mut sub_layers = self.sub_layers.lock().unwrap();
@@ -162,14 +179,17 @@ where
         *obj = match &self.source {
             Source::File { path, format } => {
                 let string = std::fs::read_to_string(path)?;
-                match format {
+
+                match self.auto_format(path, format)? {
+                    Format::Auto => return Err(Error::AutoFormatFailed),
                     Format::Json => serde_json::from_str(&string)?,
                     Format::Toml => toml::from_str(&string)?,
                     Format::Yaml => serde_yaml::from_str(&string)?,
                 }
             }
             Source::FileOptional { path, format } => match std::fs::read_to_string(path) {
-                Ok(string) => match format {
+                Ok(string) => match self.auto_format(path, format)? {
+                    Format::Auto => return Err(Error::AutoFormatFailed),
                     Format::Json => serde_json::from_str(&string)?,
                     Format::Toml => toml::from_str(&string)?,
                     Format::Yaml => serde_yaml::from_str(&string)?,
@@ -177,6 +197,7 @@ where
                 Err(_) => <TSolid>::Layer::default(),
             },
             Source::String { str, format } => match format {
+                Format::Auto => return Err(Error::AutoFormatFailed),
                 Format::Json => serde_json::from_str(str)?,
                 Format::Toml => toml::from_str(str)?,
                 Format::Yaml => serde_yaml::from_str(str)?,
@@ -195,7 +216,7 @@ where
             .map(|path| {
                 Layer::new(Source::File {
                     path,
-                    format: Format::Yaml,
+                    format: Format::Auto,
                 })
             })
             .collect();
@@ -210,8 +231,9 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Format {
+    Auto,
     Json,
     Toml,
     Yaml,

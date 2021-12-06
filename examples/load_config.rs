@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(LayeredConf, Deserialize, Serialize, Debug)]
 struct Config {
+    #[layered(load_config)]
+    #[clap(long)]
+    config: Option<PathBuf>,
     #[clap(long)]
     name: String,
     #[clap(long)]
@@ -42,19 +45,19 @@ struct Database {
 fn main() -> anyhow::Result<()> {
     let mut builder = Builder::<Config>::new();
     builder.new_layer(Source::File {
-        path: PathBuf::from("examples/layers/lowest.yaml"),
+        path: PathBuf::from("examples/load_config/lowest.yaml"),
         format: Format::Auto,
     });
     builder.new_layer(Source::File {
-        path: PathBuf::from("examples/layers/mid.toml"),
+        path: PathBuf::from("examples/load_config/mid.toml"),
         format: Format::Auto,
     });
     builder.new_layer(Source::File {
-        path: PathBuf::from("examples/layers/highest.json"),
+        path: PathBuf::from("examples/load_config/highest.json"),
         format: Format::Auto,
     });
     builder.new_layer(Source::FileOptional {
-        path: PathBuf::from("examples/layers/does_not_exist.json"),
+        path: PathBuf::from("examples/load_config/does_not_exist.json"),
         format: Format::Auto,
     });
     builder.new_layer(Source::Arguments);

@@ -3,6 +3,10 @@ impl layeredconf::LayeredConfSolid for Test {
 }
 impl layeredconf::LayeredConfLayer for TestLayer {
     type Config = Test;
+    fn load_configs(&self) -> Vec<std::path::PathBuf> {
+        let mut load_configs = vec![];
+        load_configs
+    }
 }
 #[derive(serde :: Deserialize, serde :: Serialize, clap :: Parser, Clone, Debug)]
 #[serde(deny_unknown_fields)]
