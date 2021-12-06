@@ -98,4 +98,36 @@ fn test_layers() {
 }
 
 #[test]
-fn test_clap() {}
+fn test_clap() {
+    let mut builder = Builder::<Config>::new();
+    builder.new_layer(Source::String {
+        str: "{}".to_string(),
+        format: Format::Json,
+    });
+    builder.new_layer(Source::String {
+        str: INTERMED_JSON.to_string(),
+        format: Format::Json,
+    });
+    builder.new_layer(Source::String {
+        str: TOP_JSON.to_string(),
+        format: Format::Json,
+    });
+    let args = vec!["test_clap", "--name", "NAME_ARG"]
+        .iter()
+        .map(|v| v.to_string())
+        .collect();
+    builder.new_layer(Source::ArgumentsFrom(args));
+
+    builder.load_all().unwrap();
+
+    let solid = builder.solidify().unwrap();
+
+    assert_eq!(solid.config, "string");
+    assert_eq!(solid.name, "NAME_ARG");
+    assert_eq!(solid.data_path, PathBuf::from("/tmp/path"));
+    assert_eq!(solid.subconfig.flibble, 10);
+    assert_eq!(
+        solid.subconfig.duration,
+        Duration::from_secs(50) + Duration::from_nanos(99)
+    );
+}

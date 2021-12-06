@@ -162,6 +162,7 @@ where
                 unimplemented!();
             }
             Source::Arguments => TLayer::parse(),
+            Source::ArgumentsFrom(from) => TLayer::parse_from(from),
         };
         self.loaded.store(true, Ordering::Relaxed);
         Ok(())
@@ -182,4 +183,5 @@ pub enum Source {
     String { str: String, format: Format },
     Environment { prefix: Option<String> },
     Arguments,
+    ArgumentsFrom(Vec<String>),
 }
