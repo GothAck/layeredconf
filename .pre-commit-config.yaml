@@ -15,7 +15,7 @@ repos:
     hooks:
       - id: tests
         name: tests
-        entry: cargo test
+        entry: cargo test --all
         language: system
         pass_filenames: false
         types: [rust]

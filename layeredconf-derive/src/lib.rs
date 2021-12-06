@@ -21,6 +21,10 @@ use syn::{parse_macro_input, Attribute, GenericArgument, Ident, Path, PathArgume
 /// LayeredConf Derive Macro
 ///
 /// ```rust
+/// use std::path::PathBuf;
+///
+/// use layeredconf::LayeredConf;
+///
 /// #[derive(LayeredConf, serde::Deserialize)]
 /// struct Config {
 ///     #[layered(load_config)]
@@ -36,7 +40,7 @@ use syn::{parse_macro_input, Attribute, GenericArgument, Ident, Path, PathArgume
 /// #[layered(subconfig)]
 /// struct SubConfig {
 ///     #[clap(long)]
-///     sub_name: String.
+///     sub_name: String,
 /// }
 /// ```
 #[proc_macro_derive(LayeredConf, attributes(layered, clap))]
