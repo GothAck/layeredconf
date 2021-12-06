@@ -86,6 +86,21 @@ impl LayeredConfStruct {
             .expect("Should never be enum")
             .fields;
 
+        let load_config_field_list = fields
+            .clone()
+            .into_iter()
+            .filter(|f| f.load_config)
+            .map(|f| {
+                let ident = &f.ident;
+
+                quote! {
+                    if let Some(load_config) = &self.#ident {
+                        load_configs.push(load_config.clone());
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
         let option_field_list = fields
             .clone()
             .into_iter()
@@ -213,6 +228,14 @@ impl LayeredConfStruct {
             }
             impl layeredconf::LayeredConfLayer for #layer_ident {
                 type Config = #ident;
+
+                fn load_configs(&self) -> Vec<std::path::PathBuf> {
+                    let mut load_configs = vec![];
+
+                    #(#load_config_field_list)*
+
+                    load_configs
+                }
             }
 
             #[derive(serde::Deserialize, serde::Serialize, #clap_derive, Clone, Debug)]
@@ -395,6 +418,8 @@ struct LayeredConfField {
     // Our attrs
     #[darling(default)]
     subconfig: bool,
+    #[darling(default)]
+    load_config: bool,
 }
 
 #[derive(Debug, FromMeta)]

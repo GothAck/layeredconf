@@ -1,5 +1,7 @@
 pub mod layers;
 
+use std::path::PathBuf;
+
 use thiserror::Error as ThisError;
 
 pub use layeredconf_derive::LayeredConf;
@@ -52,6 +54,8 @@ pub trait LayeredConfSolid {
 
 pub trait LayeredConfLayer {
     type Config: LayeredConfSolid + serde::de::DeserializeOwned;
+
+    fn load_configs(&self) -> Vec<PathBuf>;
 }
 
 pub trait LayeredConfMerge<TLayer> {

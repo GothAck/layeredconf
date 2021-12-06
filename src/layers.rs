@@ -6,6 +6,8 @@ use std::{
     },
 };
 
+use clap::Parser;
+
 use crate::Error;
 
 use super::{LayeredConfLayer, LayeredConfMerge, LayeredConfSolid, LayeredConfSolidify, Result};
@@ -25,7 +27,7 @@ where
         + clap::Parser
         + Sized,
 {
-    layers: Vec<Arc<Layer<TSolid::Layer>>>,
+    layers: Vec<Arc<Layer<TSolid>>>,
 }
 
 impl<TSolid> Builder<TSolid>
@@ -46,7 +48,7 @@ where
         Self { layers: vec![] }
     }
 
-    pub fn new_layer(&mut self, source: Source) -> Arc<Layer<TSolid::Layer>> {
+    pub fn new_layer(&mut self, source: Source) -> Arc<Layer<TSolid>> {
         let layer = Arc::from(Layer::new(source));
         self.layers.push(layer.clone());
         layer
@@ -72,8 +74,7 @@ where
         let mut merged = <TSolid>::Layer::default();
 
         for layer in self.layers.iter().rev() {
-            let obj = layer.obj.lock().unwrap();
-            merged.merge_from(&obj);
+            layer.merge_into(&mut merged)?;
         }
 
         merged.solidify()
@@ -100,9 +101,12 @@ where
 }
 
 #[derive(Debug)]
-pub struct Layer<TLayer>
+pub struct Layer<TSolid>
 where
-    TLayer: LayeredConfLayer
+    TSolid: LayeredConfSolid,
+    <TSolid>::Layer: LayeredConfLayer
+        + LayeredConfMerge<<TSolid>::Layer>
+        + LayeredConfSolidify<TSolid>
         + std::fmt::Debug
         + Default
         + serde::de::DeserializeOwned
@@ -112,13 +116,17 @@ where
         + Sized,
 {
     source: Source,
-    obj: Mutex<TLayer>,
+    obj: Mutex<<TSolid>::Layer>,
+    sub_layers: Mutex<Vec<Layer<TSolid>>>,
     loaded: AtomicBool,
 }
 
-impl<TLayer> Layer<TLayer>
+impl<TSolid> Layer<TSolid>
 where
-    TLayer: LayeredConfLayer
+    TSolid: LayeredConfSolid,
+    <TSolid>::Layer: LayeredConfLayer
+        + LayeredConfMerge<<TSolid>::Layer>
+        + LayeredConfSolidify<TSolid>
         + std::fmt::Debug
         + Default
         + serde::de::DeserializeOwned
@@ -130,13 +138,28 @@ where
     fn new(source: Source) -> Self {
         Self {
             source,
-            obj: Mutex::from(TLayer::default()),
+            obj: Mutex::from(<TSolid>::Layer::default()),
+            sub_layers: Mutex::from(Vec::new()),
             loaded: AtomicBool::new(false),
         }
     }
 
+    fn merge_into(&self, merged: &mut <TSolid>::Layer) -> Result<()> {
+        let obj = self.obj.lock().unwrap();
+        let sub_layers = self.sub_layers.lock().unwrap();
+
+        merged.merge_from(&*obj);
+        for sub_layer in sub_layers.iter().rev() {
+            sub_layer.merge_into(merged)?;
+        }
+        Ok(())
+    }
+
     pub fn load(&self) -> super::Result<()> {
-        *self.obj.lock().unwrap() = match &self.source {
+        let mut obj = self.obj.lock().unwrap();
+        let mut sub_layers = self.sub_layers.lock().unwrap();
+
+        *obj = match &self.source {
             Source::File { path, format } => {
                 let string = std::fs::read_to_string(path)?;
                 match format {
@@ -151,7 +174,7 @@ where
                     Format::Toml => toml::from_str(&string)?,
                     Format::Yaml => serde_yaml::from_str(&string)?,
                 },
-                Err(_) => TLayer::default(),
+                Err(_) => <TSolid>::Layer::default(),
             },
             Source::String { str, format } => match format {
                 Format::Json => serde_json::from_str(str)?,
@@ -161,10 +184,28 @@ where
             Source::Environment { prefix: _ } => {
                 unimplemented!();
             }
-            Source::Arguments => TLayer::parse(),
-            Source::ArgumentsFrom(from) => TLayer::parse_from(from),
+            Source::Arguments => <TSolid>::Layer::parse(),
+            Source::ArgumentsFrom(from) => <TSolid>::Layer::parse_from(from),
         };
+
+        *sub_layers = obj
+            .load_configs()
+            .iter()
+            .cloned()
+            .map(|path| {
+                Layer::new(Source::File {
+                    path,
+                    format: Format::Yaml,
+                })
+            })
+            .collect();
+
+        for sub_layer in sub_layers.iter() {
+            sub_layer.load()?;
+        }
+
         self.loaded.store(true, Ordering::Relaxed);
+
         Ok(())
     }
 }
