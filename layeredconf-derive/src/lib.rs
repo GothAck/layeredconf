@@ -9,7 +9,7 @@ use std::vec;
 
 use darling::{
     ast::{self},
-    util::{self, Ignored},
+    util::{self, Ignored, Override},
     FromDeriveInput, FromField, FromMeta, ToTokens,
 };
 use proc_macro::{self, TokenStream};
@@ -39,6 +39,8 @@ struct LayeredConfStruct {
 
     #[darling(default)]
     subconfig: bool,
+    #[darling(default)]
+    default: bool,
 }
 
 impl LayeredConfStruct {
@@ -168,7 +170,57 @@ impl LayeredConfStruct {
             })
             .collect::<Vec<_>>();
 
-        let default_field_list = fields
+        let default_layer = match self.default {
+            true => Some(quote! {
+                let default = #ident::default();
+            }),
+            false => None,
+        };
+
+        let default_layer_field_list = fields
+            .clone()
+            .into_iter()
+            .map(|f| {
+                let name = &f.ident;
+                let ty = &f.ty;
+                let subconfig = f.subconfig;
+                let default = &f.default;
+
+                let ty_id = match &ty {
+                    Type::Path(path) => match path.path.segments.first() {
+                        Some(seg) => &seg.ident,
+                        _ => panic!("Can't find ident"),
+                    },
+                    _ => panic!("Can't find ident"),
+                };
+                let layer_ident = format_ident!("{}Layer", ty_id);
+
+                if subconfig {
+                    quote! {
+                        #name: #layer_ident::default_layer(),
+                    }
+                } else {
+                    match default {
+                        Some(Override::Explicit(path)) => quote! {
+                            #name: Some(#path()),
+                        },
+                        Some(Override::Inherit) => quote! {
+                            #name: Some(std::default::Default::default()),
+                        },
+                        None => match self.default {
+                            true => quote! {
+                                #name: Some(default.#name),
+                            },
+                            false => quote! {
+                                #name: None,
+                            },
+                        },
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let std_default_field_list = fields
             .clone()
             .into_iter()
             .map(|f| {
@@ -240,6 +292,14 @@ impl LayeredConfStruct {
 
                     load_configs
                 }
+
+                fn default_layer() -> Self {
+                    #default_layer
+
+                    Self {
+                        #(#default_layer_field_list)*
+                    }
+                }
             }
 
             #[derive(serde::Deserialize, serde::Serialize, #clap_derive, Clone, Debug)]
@@ -261,7 +321,7 @@ impl LayeredConfStruct {
             impl std::default::Default for #layer_ident {
                 fn default() -> Self {
                     Self {
-                        #(#default_field_list)*
+                        #(#std_default_field_list)*
                     }
                 }
             }
@@ -424,6 +484,8 @@ struct LayeredConfField {
     subconfig: bool,
     #[darling(default)]
     load_config: bool,
+    #[darling(default)]
+    default: Option<Override<Path>>,
 }
 
 #[derive(Debug, FromMeta)]

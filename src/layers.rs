@@ -104,6 +104,8 @@ where
             layer.merge_into(&mut merged)?;
         }
 
+        merged.merge_from(&<TSolid>::Layer::default_layer());
+
         merged.solidify()
     }
 }

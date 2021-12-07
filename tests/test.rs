@@ -98,6 +98,129 @@ fn test_layers() {
 }
 
 #[test]
+fn test_field_level_default() -> anyhow::Result<()> {
+    use serde_json::json;
+
+    fn default_config() -> String {
+        "DEFAULT_CONFIG".to_string()
+    }
+
+    #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
+    struct Config {
+        #[layered(default = "default_config")]
+        #[clap(long)]
+        config: String,
+        #[clap(long)]
+        name: String,
+    }
+
+    let config: Config = Builder::new()
+        .new_layer(Source::String {
+            str: json!({"config": "layer_config", "name": "layer_name"}).to_string(),
+            format: Format::Json,
+        })
+        .solidify()?;
+
+    assert_eq!(config.config, "layer_config");
+    assert_eq!(config.name, "layer_name");
+
+    let config: Config = Builder::new()
+        .new_layer(Source::String {
+            str: json!({"name": "layer_name"}).to_string(),
+            format: Format::Json,
+        })
+        .solidify()?;
+
+    assert_eq!(config.config, "DEFAULT_CONFIG");
+    assert_eq!(config.name, "layer_name");
+
+    Ok(())
+}
+
+#[test]
+fn test_field_level_default_path() -> anyhow::Result<()> {
+    use serde_json::json;
+
+    fn config_default() -> String {
+        "CONFIG_DEFAULT_PATH".to_string()
+    }
+    #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
+    struct Config {
+        #[layered(default = "config_default")]
+        #[clap(long)]
+        config: String,
+        #[clap(long)]
+        name: String,
+    }
+
+    let config: Config = Builder::new()
+        .new_layer(Source::String {
+            str: json!({"config": "layer_config", "name": "layer_name"}).to_string(),
+            format: Format::Json,
+        })
+        .solidify()?;
+
+    assert_eq!(config.config, "layer_config");
+    assert_eq!(config.name, "layer_name");
+
+    let config: Config = Builder::new()
+        .new_layer(Source::String {
+            str: json!({"name": "layer_name"}).to_string(),
+            format: Format::Json,
+        })
+        .solidify()?;
+
+    assert_eq!(config.config, "CONFIG_DEFAULT_PATH");
+    assert_eq!(config.name, "layer_name");
+
+    Ok(())
+}
+
+#[test]
+fn test_struct_level_default() -> anyhow::Result<()> {
+    use serde_json::json;
+    #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
+    #[layered(default)]
+    struct Config {
+        #[clap(long)]
+        config: String,
+        #[clap(long)]
+        name: String,
+    }
+
+    impl Default for Config {
+        fn default() -> Self {
+            Self {
+                config: "DEFAULT_CONFIG".to_string(),
+                name: "DEFAULT_NAME".to_string(),
+            }
+        }
+    }
+
+    let config: Config = Builder::new()
+        .new_layer(Source::String {
+            str: json!({"config": "layer_config", "name": "layer_name"}).to_string(),
+            format: Format::Json,
+        })
+        .solidify()?;
+
+    assert_eq!(config.config, "layer_config");
+    assert_eq!(config.name, "layer_name");
+
+    let config: Config = Builder::new()
+        .new_layer(Source::String {
+            str: json!({"name": "layer_name"}).to_string(),
+            format: Format::Json,
+        })
+        .solidify()?;
+
+    assert_eq!(config.config, "DEFAULT_CONFIG");
+    assert_eq!(config.name, "layer_name");
+
+    Ok(())
+}
+
+#[test]
 fn test_clap() {
     let mut builder = Builder::<Config>::new();
     builder.new_layer(Source::String {

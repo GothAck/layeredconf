@@ -7,6 +7,13 @@ impl layeredconf::LayeredConfLayer for TestLayer {
         let mut load_configs = vec![];
         load_configs
     }
+    fn default_layer() -> Self {
+        Self {
+            boolean: None,
+            integer: None,
+            optional: None,
+        }
+    }
 }
 #[derive(serde :: Deserialize, serde :: Serialize, clap :: Parser, Clone, Debug)]
 struct TestLayer {
