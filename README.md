@@ -24,7 +24,7 @@ Add `layeredconf`, `clap`, and `serde` to your `Cargo.toml`
 
 ```toml
 [dependancies]
-layeredconf = "0.1.3"
+layeredconf = "0.1.4"
 clap = "3.0.0-beta.5"
 serde = { version = "1.0", features = ["derive"] }
 ```
