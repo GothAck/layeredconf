@@ -21,8 +21,8 @@
 //! Add `layeredconf`, `clap`, and `serde` to your `Cargo.toml`
 //!
 //! ```toml
-//! [dependancies]
-//! layeredconf = "0.1.4"
+//! [dependencies]
+//! layeredconf = "0.2.0"
 //! clap = "3.0.0-beta.5"
 //! serde = { version = "1.0", features = ["derive"] }
 //! ```

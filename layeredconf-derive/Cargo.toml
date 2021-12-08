@@ -1,6 +1,6 @@
 [package]
 name = "layeredconf-derive"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["Greg \"GothAck\" Miell <rust@greg.gothack.ninja>"]
 description = "Layered configeration files, deserialized with serde"
 repository = "https://github.com/GothAck/layeredconf"
