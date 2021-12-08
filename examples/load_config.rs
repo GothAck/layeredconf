@@ -41,22 +41,22 @@ struct Database {
 
 fn main() -> anyhow::Result<()> {
     let mut builder = Builder::<Config>::new();
-    builder.new_layer(Source::File {
-        path: PathBuf::from("examples/load_config/lowest.yaml"),
-        format: Format::Auto,
-    });
-    builder.new_layer(Source::File {
-        path: PathBuf::from("examples/load_config/mid.toml"),
-        format: Format::Auto,
-    });
-    builder.new_layer(Source::File {
-        path: PathBuf::from("examples/load_config/highest.json"),
-        format: Format::Auto,
-    });
-    builder.new_layer(Source::FileOptional {
-        path: PathBuf::from("examples/load_config/does_not_exist.json"),
-        format: Format::Auto,
-    });
+    builder.new_layer(Source::File(
+        "examples/load_config/lowest.yaml".parse()?,
+        Format::Auto,
+    ));
+    builder.new_layer(Source::File(
+        "examples/load_config/mid.toml".parse()?,
+        Format::Auto,
+    ));
+    builder.new_layer(Source::File(
+        "examples/load_config/highest.json".parse()?,
+        Format::Auto,
+    ));
+    builder.new_layer(Source::FileOptional(
+        "examples/load_config/does_not_exist.json".parse()?,
+        Format::Auto,
+    ));
     builder.new_layer(Source::Arguments);
     let solid = builder.solidify()?;
 

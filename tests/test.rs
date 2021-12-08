@@ -77,18 +77,9 @@ fn test_merge() {
 #[test]
 fn test_layers() {
     let mut builder = Builder::<Config>::new();
-    builder.new_layer(Source::String {
-        str: "{}".to_string(),
-        format: Format::Json,
-    });
-    builder.new_layer(Source::String {
-        str: INTERMED_JSON.to_string(),
-        format: Format::Json,
-    });
-    builder.new_layer(Source::String {
-        str: TOP_JSON.to_string(),
-        format: Format::Json,
-    });
+    builder.new_layer(Source::String("{}".to_string(), Format::Json));
+    builder.new_layer(Source::String(INTERMED_JSON.to_string(), Format::Json));
+    builder.new_layer(Source::String(TOP_JSON.to_string(), Format::Json));
 
     builder.load_all().unwrap();
 
@@ -115,20 +106,20 @@ fn test_field_level_default() -> anyhow::Result<()> {
     }
 
     let config: Config = Builder::new()
-        .new_layer(Source::String {
-            str: json!({"config": "layer_config", "name": "layer_name"}).to_string(),
-            format: Format::Json,
-        })
+        .new_layer(Source::String(
+            json!({"config": "layer_config", "name": "layer_name"}).to_string(),
+            Format::Json,
+        ))
         .solidify()?;
 
     assert_eq!(config.config, "layer_config");
     assert_eq!(config.name, "layer_name");
 
     let config: Config = Builder::new()
-        .new_layer(Source::String {
-            str: json!({"name": "layer_name"}).to_string(),
-            format: Format::Json,
-        })
+        .new_layer(Source::String(
+            json!({"name": "layer_name"}).to_string(),
+            Format::Json,
+        ))
         .solidify()?;
 
     assert_eq!(config.config, "DEFAULT_CONFIG");
@@ -154,20 +145,20 @@ fn test_field_level_default_path() -> anyhow::Result<()> {
     }
 
     let config: Config = Builder::new()
-        .new_layer(Source::String {
-            str: json!({"config": "layer_config", "name": "layer_name"}).to_string(),
-            format: Format::Json,
-        })
+        .new_layer(Source::String(
+            json!({"config": "layer_config", "name": "layer_name"}).to_string(),
+            Format::Json,
+        ))
         .solidify()?;
 
     assert_eq!(config.config, "layer_config");
     assert_eq!(config.name, "layer_name");
 
     let config: Config = Builder::new()
-        .new_layer(Source::String {
-            str: json!({"name": "layer_name"}).to_string(),
-            format: Format::Json,
-        })
+        .new_layer(Source::String(
+            json!({"name": "layer_name"}).to_string(),
+            Format::Json,
+        ))
         .solidify()?;
 
     assert_eq!(config.config, "CONFIG_DEFAULT_PATH");
@@ -198,20 +189,20 @@ fn test_struct_level_default() -> anyhow::Result<()> {
     }
 
     let config: Config = Builder::new()
-        .new_layer(Source::String {
-            str: json!({"config": "layer_config", "name": "layer_name"}).to_string(),
-            format: Format::Json,
-        })
+        .new_layer(Source::String(
+            json!({"config": "layer_config", "name": "layer_name"}).to_string(),
+            Format::Json,
+        ))
         .solidify()?;
 
     assert_eq!(config.config, "layer_config");
     assert_eq!(config.name, "layer_name");
 
     let config: Config = Builder::new()
-        .new_layer(Source::String {
-            str: json!({"name": "layer_name"}).to_string(),
-            format: Format::Json,
-        })
+        .new_layer(Source::String(
+            json!({"name": "layer_name"}).to_string(),
+            Format::Json,
+        ))
         .solidify()?;
 
     assert_eq!(config.config, "DEFAULT_CONFIG");
@@ -223,18 +214,9 @@ fn test_struct_level_default() -> anyhow::Result<()> {
 #[test]
 fn test_clap() {
     let mut builder = Builder::<Config>::new();
-    builder.new_layer(Source::String {
-        str: "{}".to_string(),
-        format: Format::Json,
-    });
-    builder.new_layer(Source::String {
-        str: INTERMED_JSON.to_string(),
-        format: Format::Json,
-    });
-    builder.new_layer(Source::String {
-        str: TOP_JSON.to_string(),
-        format: Format::Json,
-    });
+    builder.new_layer(Source::String("{}".to_string(), Format::Json));
+    builder.new_layer(Source::String(INTERMED_JSON.to_string(), Format::Json));
+    builder.new_layer(Source::String(TOP_JSON.to_string(), Format::Json));
     let args = vec!["test_clap", "--name", "NAME_ARG"]
         .iter()
         .map(|v| v.to_string())

@@ -30,7 +30,7 @@ use super::{LayeredConfLayer, LayeredConfMerge, LayeredConfSolid, LayeredConfSol
 ///
 /// fn main() -> anyhow::Result<()> {
 ///     let config: Config = Builder::new()
-///         .new_layer(Source::String { str: "{ \"name\": \"test\" }".to_string(), format: Format::Json })
+///         .new_layer(Source::String("{ \"name\": \"test\" }".to_string(), Format::Json))
 ///         .solidify()?;
 ///
 ///     Ok(())
@@ -199,17 +199,16 @@ where
         let mut sub_layers = self.sub_layers.lock().unwrap();
 
         *obj = match &self.source {
-            Source::File { path, format } => self.load_file(path, format, seen_paths)?,
-            Source::FileOptional { path, format } => match self.load_file(path, format, seen_paths)
-            {
+            Source::File(path, format) => self.load_file(path, format, seen_paths)?,
+            Source::FileOptional(path, format) => match self.load_file(path, format, seen_paths) {
                 Err(Error::FileNotFound { .. }) => <TSolid>::Layer::default(),
                 Err(error) => {
                     return Err(error);
                 }
                 Ok(value) => value,
             },
-            Source::String { str, format } => self.load_string(str, format)?,
-            Source::Environment { prefix: _ } => {
+            Source::String(string, format) => self.load_string(string, format)?,
+            Source::Environment(_) => {
                 unimplemented!();
             }
             Source::Arguments => <TSolid>::Layer::parse(),
@@ -227,10 +226,7 @@ where
                 parents.insert(0, self.source.clone());
 
                 Layer::new(
-                    Source::File {
-                        path,
-                        format: Format::Auto,
-                    },
+                    Source::File(path, Format::Auto),
                     Some(source_dir.clone()),
                     parents,
                 )
@@ -250,7 +246,7 @@ where
         use Source::{File, FileOptional};
 
         Ok(match &self.source {
-            File { path, .. } | FileOptional { path, .. } => {
+            File(path, _) | FileOptional(path, _) => {
                 let real_path = if path.is_absolute() {
                     path.to_path_buf()
                 } else {
@@ -345,31 +341,13 @@ pub enum Format {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     /// From a file
-    File {
-        /// File path
-        path: PathBuf,
-        /// File format
-        format: Format,
-    },
+    File(PathBuf, Format),
     /// From a file, ignoring if it doesn't exist
-    FileOptional {
-        /// File path
-        path: PathBuf,
-        /// File format
-        format: Format,
-    },
+    FileOptional(PathBuf, Format),
     /// From a String
-    String {
-        /// String contents
-        str: String,
-        /// Format
-        format: Format,
-    },
+    String(String, Format),
     /// From process env (currently unimplemented)
-    Environment {
-        /// Optional prefix for environment variables
-        prefix: Option<String>,
-    },
+    Environment(Option<String>),
     /// From argv
     Arguments,
     /// From an Vec of arguments

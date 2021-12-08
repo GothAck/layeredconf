@@ -25,10 +25,10 @@ fn test() -> anyhow::Result<()> {
         .collect();
 
     let config: Config = Builder::new()
-        .new_layer(Source::File {
-            path: PathBuf::from("./tests/paths/config.yaml"),
-            format: Format::Auto,
-        })
+        .new_layer(Source::File(
+            PathBuf::from("./tests/paths/config.yaml"),
+            Format::Auto,
+        ))
         .new_layer(Source::ArgumentsFrom(args))
         .solidify()?;
 
@@ -39,10 +39,10 @@ fn test() -> anyhow::Result<()> {
 
 #[test]
 fn test_loop() -> anyhow::Result<()> {
-    let source = Source::File {
-        path: PathBuf::from("./tests/paths/loop/config.yaml"),
-        format: Format::Auto,
-    };
+    let source = Source::File(
+        PathBuf::from("./tests/paths/loop/config.yaml"),
+        Format::Auto,
+    );
 
     let result: Result<Config> = Builder::new().new_layer(source.clone()).solidify();
 
@@ -53,10 +53,7 @@ fn test_loop() -> anyhow::Result<()> {
         assert_eq!(
             parents,
             vec![
-                Source::File {
-                    path: PathBuf::from("other_config.yaml"),
-                    format: Format::Auto
-                },
+                Source::File(PathBuf::from("other_config.yaml"), Format::Auto),
                 source,
             ],
         );
