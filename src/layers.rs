@@ -27,7 +27,7 @@ use super::{LayeredConfLayer, LayeredConfMerge, LayeredConfSolid, LayeredConfSol
 ///
 /// fn main() -> anyhow::Result<()> {
 ///     let config: Config = Builder::new()
-///         .new_layer(Source::String("{ \"name\": \"test\" }".to_string(), Format::Json))
+///         .new_layer(Source::String("name: test".to_string(), Format::Yaml))
 ///         .solidify()?;
 ///
 ///     Ok(())
