@@ -72,3 +72,42 @@ struct Test {
     file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
         .unwrap();
 }
+
+#[test]
+fn test_subconfig_field() {
+    let mut mint = Mint::new("tests/goldenfiles");
+    let mut file = mint.new_goldenfile("test_subconfig_field.rs").unwrap();
+
+    let input = r#"
+#[derive(LayeredConf, serde::Deserialize)]
+struct Test {
+    name: String,
+    #[layered(subconfig)]
+    subconfig: TestSubConfig,
+}
+"#;
+    let parsed = syn::parse_str(input).unwrap();
+    let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
+
+    file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
+        .unwrap();
+}
+
+#[test]
+fn test_subconfig_struct() {
+    let mut mint = Mint::new("tests/goldenfiles");
+    let mut file = mint.new_goldenfile("test_subconfig_struct.rs").unwrap();
+
+    let input = r#"
+#[derive(LayeredConf, serde::Deserialize)]
+#[layered(subconfig)]
+struct TestSubConfig {
+    test: String,
+}
+"#;
+    let parsed = syn::parse_str(input).unwrap();
+    let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
+
+    file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
+        .unwrap();
+}
