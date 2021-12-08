@@ -13,7 +13,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, GenericArgument, Ident, Path, PathArguments, Type};
 
-#[proc_macro_derive(LayeredConf, attributes(layered, clap))]
+#[proc_macro_derive(LayeredConf, attributes(layered, clap, doc))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
     let conf_struct = LayeredConfStruct::from_derive_input(&input).expect("Wrong options");
@@ -26,7 +26,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 #[derive(Debug, FromDeriveInput)]
 #[darling(
     attributes(layered),
-    forward_attrs(clap, serde),
+    forward_attrs(clap, serde, doc),
     supports(struct_named)
 )]
 struct LayeredConfStruct {
@@ -479,7 +479,7 @@ impl ToTokens for LayeredConfStruct {
 }
 
 #[derive(Debug, FromField)]
-#[darling(attributes(layered), forward_attrs(clap, serde))]
+#[darling(attributes(layered), forward_attrs(clap, serde, doc))]
 struct LayeredConfField {
     ident: Option<Ident>,
     ty: Type,

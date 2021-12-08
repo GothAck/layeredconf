@@ -111,3 +111,27 @@ struct TestSubConfig {
     file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
         .unwrap();
 }
+
+#[test]
+fn test_docstrings() {
+    let mut mint = Mint::new("tests/goldenfiles");
+    let mut file = mint.new_goldenfile("test_docstrings.rs").unwrap();
+
+    let input = r#"
+#[derive(LayeredConf, serde::Deserialize)]
+/// This is kept so that clap can parse it
+///
+/// Long description here.
+struct TestSubConfig {
+    /// This is kept too
+    ///
+    /// Long description here.
+    test: String,
+}
+"#;
+    let parsed = syn::parse_str(input).unwrap();
+    let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
+
+    file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
+        .unwrap();
+}
