@@ -81,8 +81,6 @@ fn test_layers() {
     builder.new_layer(Source::String(INTERMED_JSON.to_string(), Format::Json));
     builder.new_layer(Source::String(TOP_JSON.to_string(), Format::Json));
 
-    builder.load_all().unwrap();
-
     let solid = builder.solidify().unwrap();
 
     assert_eq!(serde_json::to_string(&solid).unwrap(), FULL_JSON_SOLID);
@@ -222,8 +220,6 @@ fn test_clap() {
         .map(|v| v.to_string())
         .collect();
     builder.new_layer(Source::ArgumentsFrom(args));
-
-    builder.load_all().unwrap();
 
     let solid = builder.solidify().unwrap();
 

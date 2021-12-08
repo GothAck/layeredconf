@@ -4,10 +4,7 @@ use std::{
     collections::HashSet,
     env::current_dir,
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
 use clap::Parser;
@@ -80,23 +77,13 @@ where
         self
     }
 
-    /// Loads all the config sources defined in the builder
-    pub fn load_all(&self) -> Result<()> {
-        for layer in self.layers.iter() {
-            layer.load()?;
-        }
-        Ok(())
-    }
-
     /// Solidifies the Builder ingo a Config
     pub fn solidify(&self) -> Result<TSolid> {
         if self.layers.is_empty() {
             return Err(Error::SolidifyFailedNoLayers);
         }
         for layer in &self.layers {
-            if !layer.loaded.load(Ordering::Relaxed) {
-                layer.load()?;
-            }
+            layer.load()?;
         }
 
         let mut merged = <TSolid>::Layer::default();
@@ -150,7 +137,6 @@ where
     parents: Vec<Source>,
     obj: Mutex<<TSolid>::Layer>,
     sub_layers: Mutex<Vec<Layer<TSolid>>>,
-    loaded: AtomicBool,
 }
 
 impl<TSolid> Layer<TSolid>
@@ -174,7 +160,6 @@ where
             parents,
             obj: Mutex::from(<TSolid>::Layer::default()),
             sub_layers: Mutex::from(Vec::new()),
-            loaded: AtomicBool::new(false),
         }
     }
 
@@ -236,8 +221,6 @@ where
         for sub_layer in sub_layers.iter() {
             sub_layer.load_impl(seen_paths)?;
         }
-
-        self.loaded.store(true, Ordering::Relaxed);
 
         Ok(())
     }

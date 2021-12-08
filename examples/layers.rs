@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use layeredconf::{Builder, Format, LayeredConf, Source};
 use serde::{Deserialize, Serialize};
