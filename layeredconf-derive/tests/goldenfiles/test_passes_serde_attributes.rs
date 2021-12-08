@@ -1,3 +1,14 @@
+#[derive(serde :: Deserialize, serde :: Serialize, clap :: Parser, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+struct TestLayer {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "bool")]
+    boolean: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    integer: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    optional: Option<String>,
+}
 impl layeredconf::LayeredConfSolid for Test {
     type Layer = TestLayer;
 }
@@ -14,17 +25,6 @@ impl layeredconf::LayeredConfLayer for TestLayer {
             optional: None,
         }
     }
-}
-#[derive(serde :: Deserialize, serde :: Serialize, clap :: Parser, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-struct TestLayer {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "bool")]
-    boolean: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    integer: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    optional: Option<String>,
 }
 impl TestLayer {
     fn empty(&self) -> bool {

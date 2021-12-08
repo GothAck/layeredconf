@@ -8,13 +8,13 @@ mod test_util;
 use std::vec;
 
 use darling::{
-    ast::{self},
-    util::{self, Ignored, Override},
+    ast,
+    util::{Ignored, Override},
     FromDeriveInput, FromField, FromMeta, ToTokens,
 };
-use proc_macro::{self, TokenStream};
+use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Attribute, GenericArgument, Ident, Path, PathArguments, Type};
+use syn::{parse_macro_input, GenericArgument, Ident, Path, PathArguments, Type};
 
 #[proc_macro_derive(LayeredConf, attributes(layered, clap))]
 pub fn derive(input: TokenStream) -> TokenStream {
@@ -34,7 +34,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 )]
 struct LayeredConfStruct {
     ident: Ident,
-    data: ast::Data<util::Ignored, LayeredConfField>,
+    data: ast::Data<Ignored, LayeredConfField>,
     attrs: Vec<syn::Attribute>,
 
     #[darling(default)]
@@ -78,37 +78,24 @@ impl LayeredConfStruct {
         }
     }
 
-    fn to_layer_tokens(
-        &self,
-        ident: &Ident,
-        data: &ast::Data<Ignored, LayeredConfField>,
-        attrs: &[Attribute],
-    ) -> proc_macro2::TokenStream {
-        let layer_ident = format_ident!("{}Layer", ident);
+    fn layer_ident(&self) -> Ident {
+        format_ident!("{}Layer", self.ident)
+    }
 
-        let fields = data
+    fn fields(&self) -> Vec<&LayeredConfField> {
+        self.data
             .as_ref()
             .take_struct()
             .expect("Should never be enum")
-            .fields;
+            .fields
+    }
 
-        let load_config_field_list = fields
-            .clone()
-            .into_iter()
-            .filter(|f| f.load_config)
-            .map(|f| {
-                let ident = &f.ident;
+    fn to_layer_tokens(&self) -> proc_macro2::TokenStream {
+        let layer_ident = self.layer_ident();
 
-                quote! {
-                    if let Some(load_config) = &self.#ident {
-                        load_configs.push(load_config.clone());
-                    }
-                }
-            })
-            .collect::<Vec<_>>();
+        let fields = self.fields();
 
         let option_field_list = fields
-            .clone()
             .into_iter()
             .map(|f| {
                 let name = &f.ident;
@@ -170,6 +157,48 @@ impl LayeredConfStruct {
             })
             .collect::<Vec<_>>();
 
+        let container_attrs = self
+            .attrs
+            .iter()
+            .map(|a| a.into_token_stream())
+            .collect::<Vec<_>>();
+
+        let clap_derive = if self.subconfig {
+            quote! { clap::Args }
+        } else {
+            quote! { clap::Parser }
+        };
+
+        quote! {
+            #[derive(serde::Deserialize, serde::Serialize, #clap_derive, Clone, Debug)]
+            #(#container_attrs)*
+            struct #layer_ident {
+                #(#option_field_list)*
+            }
+        }
+    }
+
+    fn to_impl_layered_conf_tokens(&self) -> proc_macro2::TokenStream {
+        let ident = &self.ident;
+        let layer_ident = self.layer_ident();
+
+        let fields = self.fields();
+
+        let load_config_field_list = fields
+            .clone()
+            .into_iter()
+            .filter(|f| f.load_config)
+            .map(|f| {
+                let ident = &f.ident;
+
+                quote! {
+                    if let Some(load_config) = &self.#ident {
+                        load_configs.push(load_config.clone());
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
         let default_layer = match self.default {
             true => Some(quote! {
                 let default = #ident::default();
@@ -178,7 +207,6 @@ impl LayeredConfStruct {
         };
 
         let default_layer_field_list = fields
-            .clone()
             .into_iter()
             .map(|f| {
                 let name = &f.ident;
@@ -220,8 +248,74 @@ impl LayeredConfStruct {
             })
             .collect::<Vec<_>>();
 
+        quote! {
+            impl layeredconf::LayeredConfSolid for #ident {
+                type Layer = #layer_ident;
+            }
+            impl layeredconf::LayeredConfLayer for #layer_ident {
+                type Config = #ident;
+
+                fn load_configs(&self) -> Vec<std::path::PathBuf> {
+                    let mut load_configs = vec![];
+
+                    #(#load_config_field_list)*
+
+                    load_configs
+                }
+
+                fn default_layer() -> Self {
+                    #default_layer
+
+                    Self {
+                        #(#default_layer_field_list)*
+                    }
+                }
+            }
+        }
+    }
+
+    fn to_layer_impl_tokens(&self) -> proc_macro2::TokenStream {
+        let layer_ident = self.layer_ident();
+
+        let fields = self.fields();
+
+        let empty_field_list = fields
+            .into_iter()
+            .map(|f| {
+                let ident = &f.ident;
+                let subconfig = f.subconfig;
+
+                if subconfig {
+                    quote! {
+                        empty.push(self.#ident.empty());
+                    }
+                } else {
+                    quote! {
+                        empty.push(self.#ident.is_none());
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        quote! {
+            impl #layer_ident {
+                fn empty(&self) -> bool {
+                    let mut empty = vec![];
+
+                    #(#empty_field_list)*
+
+                    empty.iter().all(|v| *v)
+                }
+            }
+        }
+    }
+
+    fn to_layer_default_tokens(&self) -> proc_macro2::TokenStream {
+        let layer_ident = self.layer_ident();
+
+        let fields = self.fields();
+
         let std_default_field_list = fields
-            .clone()
             .into_iter()
             .map(|f| {
                 let name = &f.ident;
@@ -249,75 +343,7 @@ impl LayeredConfStruct {
             })
             .collect::<Vec<_>>();
 
-        let empty_field_list = fields
-            .into_iter()
-            .map(|f| {
-                let ident = &f.ident;
-                let subconfig = f.subconfig;
-
-                if subconfig {
-                    quote! {
-                        empty.push(self.#ident.empty());
-                    }
-                } else {
-                    quote! {
-                        empty.push(self.#ident.is_none());
-                    }
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let container_attrs = attrs
-            .iter()
-            .map(|a| a.into_token_stream())
-            .collect::<Vec<_>>();
-
-        let clap_derive = if self.subconfig {
-            quote! { clap:: Args }
-        } else {
-            quote! { clap::Parser }
-        };
-
         quote! {
-            impl layeredconf::LayeredConfSolid for #ident {
-                type Layer = #layer_ident;
-            }
-            impl layeredconf::LayeredConfLayer for #layer_ident {
-                type Config = #ident;
-
-                fn load_configs(&self) -> Vec<std::path::PathBuf> {
-                    let mut load_configs = vec![];
-
-                    #(#load_config_field_list)*
-
-                    load_configs
-                }
-
-                fn default_layer() -> Self {
-                    #default_layer
-
-                    Self {
-                        #(#default_layer_field_list)*
-                    }
-                }
-            }
-
-            #[derive(serde::Deserialize, serde::Serialize, #clap_derive, Clone, Debug)]
-            #(#container_attrs)*
-            struct #layer_ident {
-                #(#option_field_list)*
-            }
-
-            impl #layer_ident {
-                fn empty(&self) -> bool {
-                    let mut empty = vec![];
-
-                    #(#empty_field_list)*
-
-                    empty.iter().all(|v| *v)
-                }
-            }
-
             impl std::default::Default for #layer_ident {
                 fn default() -> Self {
                     Self {
@@ -328,18 +354,10 @@ impl LayeredConfStruct {
         }
     }
 
-    fn to_merge_tokens(
-        &self,
-        ident: &Ident,
-        data: &ast::Data<Ignored, LayeredConfField>,
-    ) -> proc_macro2::TokenStream {
-        let layer_ident = format_ident!("{}Layer", ident);
+    fn to_merge_tokens(&self) -> proc_macro2::TokenStream {
+        let layer_ident = self.layer_ident();
 
-        let fields = data
-            .as_ref()
-            .take_struct()
-            .expect("Should never be enum")
-            .fields;
+        let fields = self.fields();
 
         let field_list = fields
             .into_iter()
@@ -368,18 +386,10 @@ impl LayeredConfStruct {
         }
     }
 
-    fn to_solidify_tokens(
-        &self,
-        ident: &Ident,
-        data: &ast::Data<Ignored, LayeredConfField>,
-    ) -> proc_macro2::TokenStream {
-        let layer_ident = format_ident!("{}Layer", ident);
+    fn to_solidify_tokens(&self) -> proc_macro2::TokenStream {
+        let layer_ident = self.layer_ident();
 
-        let fields = data
-            .as_ref()
-            .take_struct()
-            .expect("Should never be enum")
-            .fields;
+        let fields = self.fields();
 
         let field_list = fields
             .clone()
@@ -436,10 +446,13 @@ impl LayeredConfStruct {
             })
             .collect::<Vec<_>>();
 
+        let ident = &self.ident;
+
         quote! {
             impl layeredconf::LayeredConfSolidify<#ident> for #layer_ident {
                 fn solidify(&self) -> layeredconf::Result<#ident> {
                     let mut missing = vec![];
+
                     #(#field_list)*
 
                     if !missing.is_empty() {
@@ -459,16 +472,12 @@ impl LayeredConfStruct {
 
 impl ToTokens for LayeredConfStruct {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let LayeredConfStruct {
-            ref ident,
-            ref data,
-            ref attrs,
-            ..
-        } = *self;
-
-        tokens.extend(self.to_layer_tokens(ident, data, attrs));
-        tokens.extend(self.to_merge_tokens(ident, data));
-        tokens.extend(self.to_solidify_tokens(ident, data));
+        tokens.extend(self.to_layer_tokens());
+        tokens.extend(self.to_impl_layered_conf_tokens());
+        tokens.extend(self.to_layer_impl_tokens());
+        tokens.extend(self.to_layer_default_tokens());
+        tokens.extend(self.to_merge_tokens());
+        tokens.extend(self.to_solidify_tokens());
     }
 }
 
