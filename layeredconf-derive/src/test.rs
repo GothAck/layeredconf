@@ -11,9 +11,9 @@ use crate::LayeredConfStruct;
 use test_util::rustfmt_ext;
 
 #[test]
-fn test() -> anyhow::Result<()> {
+fn test() {
     let mut mint = Mint::new("tests/goldenfiles");
-    let mut file = mint.new_goldenfile("test.rs")?;
+    let mut file = mint.new_goldenfile("test.rs").unwrap();
 
     let good_input = r#"
 #[derive(LayeredConf)]
@@ -22,18 +22,17 @@ struct Test {
     integer: u64,
 }
 "#;
-    let parsed = syn::parse_str(good_input)?;
+    let parsed = syn::parse_str(good_input).unwrap();
     let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
 
-    file.write_all(rustfmt_ext(quote!(#conf_struct))?.as_bytes())?;
-
-    Ok(())
+    file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
+        .unwrap();
 }
 
 #[test]
-fn test_option() -> anyhow::Result<()> {
+fn test_option() {
     let mut mint = Mint::new("tests/goldenfiles");
-    let mut file = mint.new_goldenfile("test_option.rs")?;
+    let mut file = mint.new_goldenfile("test_option.rs").unwrap();
 
     let good_input = r#"
 #[derive(LayeredConf)]
@@ -43,18 +42,19 @@ struct Test {
     optional: Option<String>,
 }
 "#;
-    let parsed = syn::parse_str(good_input)?;
+    let parsed = syn::parse_str(good_input).unwrap();
     let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
 
-    file.write_all(rustfmt_ext(quote!(#conf_struct))?.as_bytes())?;
-
-    Ok(())
+    file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
+        .unwrap();
 }
 
 #[test]
-fn test_passes_serde_attributes() -> anyhow::Result<()> {
+fn test_passes_serde_attributes() {
     let mut mint = Mint::new("tests/goldenfiles");
-    let mut file = mint.new_goldenfile("test_passes_serde_attributes.rs")?;
+    let mut file = mint
+        .new_goldenfile("test_passes_serde_attributes.rs")
+        .unwrap();
 
     let good_input = r#"
 #[derive(LayeredConf, serde::Deserialize)]
@@ -66,10 +66,9 @@ struct Test {
     optional: Option<String>,
 }
 "#;
-    let parsed = syn::parse_str(good_input)?;
+    let parsed = syn::parse_str(good_input).unwrap();
     let conf_struct = LayeredConfStruct::from_derive_input(&parsed).unwrap();
 
-    file.write_all(rustfmt_ext(quote!(#conf_struct))?.as_bytes())?;
-
-    Ok(())
+    file.write_all(rustfmt_ext(quote!(#conf_struct)).unwrap().as_bytes())
+        .unwrap();
 }
