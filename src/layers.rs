@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashSet,
+    env::current_dir,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -74,7 +75,7 @@ where
 
     /// Adds a new Layer to the Builder from a source
     pub fn new_layer(&mut self, source: Source) -> &mut Self {
-        let layer = Arc::from(Layer::new(source));
+        let layer = Arc::from(Layer::new(source, None));
         self.layers.push(layer);
         self
     }
@@ -145,6 +146,7 @@ where
         + Sized,
 {
     source: Source,
+    cwd: Option<PathBuf>,
     obj: Mutex<<TSolid>::Layer>,
     sub_layers: Mutex<Vec<Layer<TSolid>>>,
     loaded: AtomicBool,
@@ -164,9 +166,10 @@ where
         + clap::Parser
         + Sized,
 {
-    fn new(source: Source) -> Self {
+    fn new(source: Source, cwd: Option<PathBuf>) -> Self {
         Self {
             source,
+            cwd,
             obj: Mutex::from(<TSolid>::Layer::default()),
             sub_layers: Mutex::from(Vec::new()),
             loaded: AtomicBool::new(false),
@@ -211,15 +214,20 @@ where
             Source::ArgumentsFrom(from) => <TSolid>::Layer::parse_from(from),
         };
 
+        let source_dir = self.get_source_dir()?;
+
         *sub_layers = obj
             .load_configs()
             .iter()
             .cloned()
             .map(|path| {
-                Layer::new(Source::File {
-                    path,
-                    format: Format::Auto,
-                })
+                Layer::new(
+                    Source::File {
+                        path,
+                        format: Format::Auto,
+                    },
+                    Some(source_dir.clone()),
+                )
             })
             .collect();
 
@@ -232,15 +240,41 @@ where
         Ok(())
     }
 
+    fn get_source_dir(&self) -> Result<PathBuf> {
+        use Source::{File, FileOptional};
+
+        Ok(match &self.source {
+            File { path, .. } | FileOptional { path, .. } => {
+                let real_path = if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    self.get_cwd()?.join(path)
+                };
+                real_path
+                    .parent()
+                    .ok_or_else(|| Error::ParentDir {
+                        path: real_path.clone(),
+                    })?
+                    .to_path_buf()
+            }
+            _ => self.get_cwd()?,
+        })
+    }
+
     fn load_file(
         &self,
         path: &Path,
         format: &Format,
         seen_paths: &mut HashSet<PathBuf>,
     ) -> Result<<TSolid>::Layer> {
+        let path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.get_cwd()?.join(path)
+        };
         let path = path
             .canonicalize()
-            .map_err(map_canonicalization_error(path))?;
+            .map_err(map_canonicalization_error(&path))?;
 
         if seen_paths.contains(&path) {
             return Err(Error::LoopingLoadConfig);
@@ -249,6 +283,14 @@ where
         let string = std::fs::read_to_string(&path).map_err(map_io_error(&path))?;
 
         self.load_string(&string, &self.auto_format(&path, format)?)
+    }
+
+    fn get_cwd(&self) -> Result<PathBuf> {
+        self.cwd
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(current_dir)
+            .map_err(|wrapped| Error::CurrentDir { wrapped })
     }
 
     fn load_string(&self, string: &str, format: &Format) -> Result<<TSolid>::Layer> {

@@ -147,6 +147,18 @@ pub enum Error {
         /// Path that failed
         path: PathBuf,
     },
+    /// Error getting current directory
+    #[error("Error getting current directory {wrapped:?}")]
+    CurrentDir {
+        /// Wrapped io::Error
+        wrapped: std::io::Error,
+    },
+    /// Error getting parent directory
+    #[error("Error getting parent directory {path:?}")]
+    ParentDir {
+        /// Path that failed
+        path: PathBuf,
+    },
     /// File I/O error
     #[error("I/O Error {wrapped:?} for {path:?}")]
     IoError {
