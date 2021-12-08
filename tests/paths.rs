@@ -2,7 +2,7 @@ use std::{env::current_dir, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use layeredconf::{Builder, Format, LayeredConf, Source};
+use layeredconf::{Builder, Error, Format, LayeredConf, Result, Source};
 
 #[derive(LayeredConf, Deserialize, Serialize, Clone, Debug)]
 struct Config {
@@ -33,6 +33,34 @@ fn test() -> anyhow::Result<()> {
         .solidify()?;
 
     assert_eq!(config.name, "paths/arg/config.yaml");
+
+    Ok(())
+}
+
+#[test]
+fn test_loop() -> anyhow::Result<()> {
+    let source = Source::File {
+        path: PathBuf::from("./tests/paths/loop/config.yaml"),
+        format: Format::Auto,
+    };
+
+    let result: Result<Config> = Builder::new().new_layer(source.clone()).solidify();
+
+    assert!(matches!(result, Err(Error::LoopingLoadConfig { .. })));
+
+    if let Err(Error::LoopingLoadConfig { path, parents }) = result {
+        assert_eq!(path, current_dir()?.join("tests/paths/loop/config.yaml"));
+        assert_eq!(
+            parents,
+            vec![
+                Source::File {
+                    path: PathBuf::from("other_config.yaml"),
+                    format: Format::Auto
+                },
+                source,
+            ],
+        );
+    }
 
     Ok(())
 }

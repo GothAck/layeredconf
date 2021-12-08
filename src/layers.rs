@@ -75,7 +75,7 @@ where
 
     /// Adds a new Layer to the Builder from a source
     pub fn new_layer(&mut self, source: Source) -> &mut Self {
-        let layer = Arc::from(Layer::new(source, None));
+        let layer = Arc::from(Layer::new(source, None, vec![]));
         self.layers.push(layer);
         self
     }
@@ -147,6 +147,7 @@ where
 {
     source: Source,
     cwd: Option<PathBuf>,
+    parents: Vec<Source>,
     obj: Mutex<<TSolid>::Layer>,
     sub_layers: Mutex<Vec<Layer<TSolid>>>,
     loaded: AtomicBool,
@@ -166,10 +167,11 @@ where
         + clap::Parser
         + Sized,
 {
-    fn new(source: Source, cwd: Option<PathBuf>) -> Self {
+    fn new(source: Source, cwd: Option<PathBuf>, parents: Vec<Source>) -> Self {
         Self {
             source,
             cwd,
+            parents,
             obj: Mutex::from(<TSolid>::Layer::default()),
             sub_layers: Mutex::from(Vec::new()),
             loaded: AtomicBool::new(false),
@@ -221,12 +223,16 @@ where
             .iter()
             .cloned()
             .map(|path| {
+                let mut parents = self.parents.clone();
+                parents.insert(0, self.source.clone());
+
                 Layer::new(
                     Source::File {
                         path,
                         format: Format::Auto,
                     },
                     Some(source_dir.clone()),
+                    parents,
                 )
             })
             .collect();
@@ -277,8 +283,10 @@ where
             .map_err(map_canonicalization_error(&path))?;
 
         if seen_paths.contains(&path) {
-            return Err(Error::LoopingLoadConfig);
+            let parents = self.parents.clone();
+            return Err(Error::LoopingLoadConfig { parents, path });
         }
+        seen_paths.insert(path.clone());
 
         let string = std::fs::read_to_string(&path).map_err(map_io_error(&path))?;
 
@@ -321,7 +329,7 @@ where
 }
 
 /// Config file format
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     /// Automatically detect config file format from it's extension
     Auto,
@@ -334,7 +342,7 @@ pub enum Format {
 }
 
 /// Config source
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     /// From a file
     File {

@@ -132,7 +132,12 @@ pub enum Error {
     AutoFormatFailed,
     /// A file was loaded in two Layers
     #[error("Loop detected loading config files")]
-    LoopingLoadConfig,
+    LoopingLoadConfig {
+        /// Parent sources
+        parents: Vec<Source>,
+        /// Path that failed
+        path: PathBuf,
+    },
     /// Path canonicalization failed
     #[error("Path canonicalization error {wrapped:?} for {path:?}")]
     PathCanonicalization {
