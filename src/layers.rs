@@ -184,61 +184,26 @@ where
         Ok(())
     }
 
+    pub fn load(&self) -> super::Result<()> {
+        let mut seen_paths = HashSet::new();
+        self.load_impl(&mut seen_paths)
+    }
+
     fn load_impl(&self, seen_paths: &mut HashSet<PathBuf>) -> super::Result<()> {
         let mut obj = self.obj.lock().unwrap();
         let mut sub_layers = self.sub_layers.lock().unwrap();
 
         *obj = match &self.source {
-            Source::File { path, format } => {
-                let path = self
-                    .canonicalize(path)
-                    .map_err(map_canonicalization_error(path))?;
-
-                if seen_paths.contains(&path) {
-                    return Err(Error::LoopingLoadConfig);
+            Source::File { path, format } => self.load_file(path, format, seen_paths)?,
+            Source::FileOptional { path, format } => match self.load_file(path, format, seen_paths)
+            {
+                Err(Error::FileNotFound { .. }) => <TSolid>::Layer::default(),
+                Err(error) => {
+                    return Err(error);
                 }
-
-                let string = std::fs::read_to_string(&path).map_err(map_io_error(&path))?;
-
-                match self.auto_format(&path, format)? {
-                    Format::Auto => return Err(Error::AutoFormatFailed),
-                    Format::Json => serde_json::from_str(&string)?,
-                    Format::Toml => toml::from_str(&string)?,
-                    Format::Yaml => serde_yaml::from_str(&string)?,
-                }
-            }
-            Source::FileOptional { path, format } => match self.canonicalize(path) {
-                Err(error) => match error.kind() {
-                    std::io::ErrorKind::NotFound => <TSolid>::Layer::default(),
-                    _ => {
-                        return Err(Error::IoError {
-                            wrapped: error,
-                            path: path.to_path_buf(),
-                        })
-                    }
-                },
-                Ok(path) => {
-                    if seen_paths.contains(&path) {
-                        return Err(Error::LoopingLoadConfig);
-                    }
-
-                    match std::fs::read_to_string(&path) {
-                        Ok(string) => match self.auto_format(&path, format)? {
-                            Format::Auto => return Err(Error::AutoFormatFailed),
-                            Format::Json => serde_json::from_str(&string)?,
-                            Format::Toml => toml::from_str(&string)?,
-                            Format::Yaml => serde_yaml::from_str(&string)?,
-                        },
-                        Err(_) => <TSolid>::Layer::default(),
-                    }
-                }
+                Ok(value) => value,
             },
-            Source::String { str, format } => match format {
-                Format::Auto => return Err(Error::AutoFormatFailed),
-                Format::Json => serde_json::from_str(str)?,
-                Format::Toml => toml::from_str(str)?,
-                Format::Yaml => serde_yaml::from_str(str)?,
-            },
+            Source::String { str, format } => self.load_string(str, format)?,
             Source::Environment { prefix: _ } => {
                 unimplemented!();
             }
@@ -267,8 +232,32 @@ where
         Ok(())
     }
 
-    fn canonicalize(&self, path: &Path) -> std::io::Result<PathBuf> {
-        std::fs::canonicalize(path)
+    fn load_file(
+        &self,
+        path: &Path,
+        format: &Format,
+        seen_paths: &mut HashSet<PathBuf>,
+    ) -> Result<<TSolid>::Layer> {
+        let path = path
+            .canonicalize()
+            .map_err(map_canonicalization_error(path))?;
+
+        if seen_paths.contains(&path) {
+            return Err(Error::LoopingLoadConfig);
+        }
+
+        let string = std::fs::read_to_string(&path).map_err(map_io_error(&path))?;
+
+        self.load_string(&string, &self.auto_format(&path, format)?)
+    }
+
+    fn load_string(&self, string: &str, format: &Format) -> Result<<TSolid>::Layer> {
+        Ok(match format {
+            Format::Auto => return Err(Error::AutoFormatFailed),
+            Format::Json => serde_json::from_str(string)?,
+            Format::Toml => toml::from_str(string)?,
+            Format::Yaml => serde_yaml::from_str(string)?,
+        })
     }
 
     fn auto_format(&self, path: &Path, format: &Format) -> Result<Format> {
@@ -286,11 +275,6 @@ where
             }
             format => Ok(*format),
         }
-    }
-
-    pub fn load(&self) -> super::Result<()> {
-        let mut seen_paths = HashSet::new();
-        self.load_impl(&mut seen_paths)
     }
 }
 

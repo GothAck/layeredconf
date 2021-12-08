@@ -141,6 +141,12 @@ pub enum Error {
         /// Path that failed
         path: PathBuf,
     },
+    /// File not found
+    #[error("File not found {path:?}")]
+    FileNotFound {
+        /// Path that failed
+        path: PathBuf,
+    },
     /// File I/O error
     #[error("I/O Error {wrapped:?} for {path:?}")]
     IoError {
@@ -170,16 +176,22 @@ pub enum Error {
 }
 
 pub(crate) fn map_io_error(path: &'_ Path) -> impl Fn(std::io::Error) -> Error + '_ {
-    move |wrapped| Error::IoError {
-        wrapped,
-        path: path.to_path_buf(),
+    move |wrapped| {
+        let path = path.to_path_buf();
+        match wrapped.kind() {
+            std::io::ErrorKind::NotFound => Error::FileNotFound { path },
+            _ => Error::IoError { wrapped, path },
+        }
     }
 }
 
 pub(crate) fn map_canonicalization_error(path: &'_ Path) -> impl Fn(std::io::Error) -> Error + '_ {
-    move |wrapped| Error::IoError {
-        wrapped,
-        path: path.to_path_buf(),
+    move |wrapped| {
+        let path = path.to_path_buf();
+        match wrapped.kind() {
+            std::io::ErrorKind::NotFound => Error::FileNotFound { path },
+            _ => Error::PathCanonicalization { path, wrapped },
+        }
     }
 }
 
